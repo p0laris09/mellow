@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mellow/auth/auth_page.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mellow/auth/signin/sign_in.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/screens/HomeScreen/home_screen.dart';

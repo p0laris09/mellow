@@ -86,7 +86,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
     if (!passwordRegExp.hasMatch(_passwordController.text)) {
       setState(() {
         _errorMessage =
-            'Password must be at least 8 characters, include an uppercase letter, a lowercase letter, a digit, and a special character.';
+            'Password must be at least 8 characters, include an uppercase letter,\na lowercase letter, a digit, and a special character.';
       });
       return;
     }
@@ -193,7 +193,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                   children: [
                     // Error message container
                     Container(
-                      height: 70,
+                      height: 45,
                       margin: const EdgeInsets.only(bottom: 16),
                       alignment: Alignment.center,
                       child: _errorMessage != null
@@ -201,7 +201,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                               _errorMessage!,
                               style: const TextStyle(
                                 color: Colors.red,
-                                fontSize: 16,
+                                fontSize: 10,
                               ),
                               textAlign: TextAlign.center,
                             )

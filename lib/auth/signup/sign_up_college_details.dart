@@ -117,7 +117,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                   children: [
                     // Error message container
                     Container(
-                      height: 70,
+                      height: 45,
                       margin: const EdgeInsets.only(bottom: 16),
                       alignment: Alignment.center,
                       child: _errorMessage != null
@@ -125,7 +125,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                               _errorMessage!,
                               style: const TextStyle(
                                 color: Colors.red,
-                                fontSize: 16,
+                                fontSize: 10,
                               ),
                               textAlign: TextAlign.center,
                             )

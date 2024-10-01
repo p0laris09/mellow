@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/auth/onboarding/onboarding.dart';
 import 'package:mellow/auth/signin/sign_in.dart';
 import 'package:mellow/auth/signup/sign_up_college_details.dart';
 
@@ -73,7 +74,16 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF2C3C3C),
         elevation: 0,
-        leading: const BackButton(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => OnboardingPage()), // Navigate to the onboarding page
+              (Route<dynamic> route) => false, // Remove all previous routes
+            );
+          },
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -118,9 +128,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                 ),
                 child: Column(
                   children: [
-                    // Error message container
                     Container(
-                      height: 70,
+                      height: 45,
                       margin: const EdgeInsets.only(bottom: 16),
                       alignment: Alignment.center,
                       child: _errorMessage != null
@@ -128,7 +137,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                               _errorMessage!,
                               style: const TextStyle(
                                 color: Colors.red,
-                                fontSize: 16,
+                                fontSize: 10,
                               ),
                               textAlign: TextAlign.center,
                             )
@@ -138,7 +147,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _firstNameController,
@@ -157,7 +166,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _middleNameController,
@@ -176,7 +185,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _lastNameController,
@@ -199,7 +208,6 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[\d/]')),
                           LengthLimitingTextInputFormatter(10),
-                          // Allow MM/dd/yyyy format only
                           TextInputFormatter.withFunction((oldValue, newValue) {
                             final text = newValue.text;
                             if (text.length == 2 || text.length == 5) {

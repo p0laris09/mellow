@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class AccountReviewScreen extends StatefulWidget {
   final String firstName;
@@ -39,45 +40,69 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
 
   // Method to handle saving data to Firestore
   Future<void> _signUpUser() async {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+    final FirebaseAuth _auth = FirebaseAuth.instance;
+    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  try {
-    // Create a new user with email and password
-    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-      email: widget.email,
-      password: widget.password,
-    );
-
-    // Save additional details to Firestore
-    if (userCredential.user != null) {
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'firstName': widget.firstName,
-        'middleName': widget.middleName,
-        'lastName': widget.lastName,
-        'birthday': widget.birthday,
-        'university': widget.university,
-        'college': widget.college,
-        'program': widget.program,
-        'year': widget.year,
-        'phoneNumber': widget.phoneNumber,
-        // Do not store password here
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully!')),
+    try {
+      // Create a new user with email and password
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: widget.email,
+        password: widget.password,
       );
 
-      // Navigate to homepage after successful sign-up
-      Navigator.pushReplacementNamed(context, '/home');
+      // Save additional details to Firestore
+      if (userCredential.user != null) {
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'firstName': widget.firstName,
+          'middleName': widget.middleName,
+          'lastName': widget.lastName,
+          'birthday': widget.birthday,
+          'university': widget.university,
+          'college': widget.college,
+          'program': widget.program,
+          'year': widget.year,
+          'phoneNumber': widget.phoneNumber,
+          // Do not store password here
+        });
+
+        // Navigate to homepage after successful sign-up
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        _showErrorDialog(context, "Email address is already registered.");
+      } else if (e.code == 'weak-password') {
+        _showErrorDialog(context, "Password provided is too weak.");
+      } else if (e.code == 'invalid-email') {
+        _showErrorDialog(context, "The email address is invalid.");
+      } else {
+        _showErrorDialog(context, "An error occurred. Please try again.");
+      }
+    } catch (error) {
+      _showErrorDialog(context, "An unexpected error occurred. Please try again.");
     }
-  } catch (error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to create account: $error')),
+  }
+
+  // Helper method to show a dialog
+  void _showErrorDialog(BuildContext context, String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Error"),
+          content: Text(errorMessage),
+          actions: [
+            TextButton(
+              child: const Text("OK"),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+            ),
+          ],
+        );
+      },
     );
   }
-}
-
 
   @override
   Widget build(BuildContext context) {

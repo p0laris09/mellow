@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:mellow/auth/onboarding/onboarding.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/screens/HomeScreen/home_screen.dart';
 
@@ -59,8 +60,18 @@ class _SignInPageState extends State<SignInPage> {
       appBar: AppBar(
         backgroundColor: Color(0xFF2C3C3C), // Matches background color
         elevation: 0, // Remove shadow under AppBar
-        leading: BackButton(color: Colors.white), // White back button
+        leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white), // Custom back icon
+        onPressed: () {
+          // Navigate back to the onboarding page
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => OnboardingPage()), // Replace with your actual onboarding page widget
+            (route) => false, // Remove all previous routes
+          );
+        },
       ),
+    ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
