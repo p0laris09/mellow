@@ -30,7 +30,8 @@ class MellowApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.grey),
         ),
       ),
-      home: AuthPage(), // This page decides where to navigate based on user authentication
+      home:
+          AuthPage(), // This page decides where to navigate based on user authentication
       routes: {
         '/signin': (context) => SignInPage(), // SignInPage route
         '/signup': (context) => SignUpPersonalDetails(), // SignUpPage route
@@ -43,7 +44,7 @@ class MellowApp extends StatelessWidget {
             return SignInPage(); // Redirect to sign-in if no user is logged in
           }
         },
-        '/profile': (context) => const ProfilePage(), 
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }

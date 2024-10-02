@@ -51,7 +51,8 @@ class _SignInTestState extends State<SignInTest> {
           const SizedBox(height: 40),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16), // Adjusted padding
+              padding: const EdgeInsets.symmetric(
+                  vertical: 32, horizontal: 16), // Adjusted padding
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.only(
@@ -70,7 +71,7 @@ class _SignInTestState extends State<SignInTest> {
                       decoration: InputDecoration(
                         labelText: "Email",
                         labelStyle: TextStyle(
-                          color: Colors.black, 
+                          color: Colors.black,
                           fontWeight: FontWeight.bold,
                         ),
                         border: UnderlineInputBorder(),
@@ -96,13 +97,14 @@ class _SignInTestState extends State<SignInTest> {
                         suffixIcon: IconButton(
                           onPressed: () {
                             setState(() {
-                              _obscureText = !_obscureText; // Toggle the visibility
+                              _obscureText =
+                                  !_obscureText; // Toggle the visibility
                             });
                           },
                           icon: Icon(
-                            _obscureText 
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                            _obscureText
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                           ),
                         ),
                       ),
@@ -117,12 +119,12 @@ class _SignInTestState extends State<SignInTest> {
                     child: ElevatedButton(
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        backgroundColor: const Color(0xFF2C3C3C),
+                      ),
                       child: const Text(
                         "SIGN IN",
                         style: TextStyle(
@@ -136,7 +138,8 @@ class _SignInTestState extends State<SignInTest> {
 
                   // Go to Sign up Page
                   Align(
-                    alignment: Alignment.centerRight, // Align the column to the right
+                    alignment:
+                        Alignment.centerRight, // Align the column to the right
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -153,7 +156,9 @@ class _SignInTestState extends State<SignInTest> {
                             // Navigate to the Sign Up page
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const SignUpPage()), // Replace with your actual SignUpPage widget
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      const SignUpPage()), // Replace with your actual SignUpPage widget
                             );
                           },
                           child: const Text(

@@ -13,7 +13,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
   final TextEditingController _middleNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _birthdayController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController(text: '+63 9');
+  final TextEditingController _phoneController =
+      TextEditingController(text: '+63 9');
 
   // Phone number validation starts with +63 9 and follows by 9 digits
   bool isValidPhilippinePhoneNumber(String phoneNumber) {
@@ -115,7 +116,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
             SizedBox(
               height: 597,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -145,7 +147,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(
+                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _firstNameController,
@@ -164,7 +167,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(
+                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _middleNameController,
@@ -183,7 +187,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
+                          FilteringTextInputFormatter.allow(RegExp(
+                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _lastNameController,
@@ -212,7 +217,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                             if (text.length == 2 || text.length == 5) {
                               return TextEditingValue(
                                 text: '$text/',
-                                selection: TextSelection.collapsed(offset: text.length + 1),
+                                selection: TextSelection.collapsed(
+                                    offset: text.length + 1),
                               );
                             }
                             return newValue;
@@ -237,9 +243,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(14)
-                        ],
+                        inputFormatters: [LengthLimitingTextInputFormatter(14)],
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(

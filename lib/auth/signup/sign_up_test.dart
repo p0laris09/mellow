@@ -77,7 +77,8 @@ class _SignUpTestState extends State<SignUpTest> {
             SizedBox(
               height: 590,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -165,7 +166,6 @@ class _SignUpTestState extends State<SignUpTest> {
                                 middleName: _middleNameController.text,
                                 lastName: _lastNameController.text,
                                 birthday: _birthdayController.text,
-                                
                               ),
                             ),
                           );
@@ -204,7 +204,8 @@ class _SignUpTestState extends State<SignUpTest> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (context) => SignInPage()),
+                                MaterialPageRoute(
+                                    builder: (context) => SignInPage()),
                               );
                             },
                             child: const Text(

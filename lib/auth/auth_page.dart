@@ -13,7 +13,8 @@ class AuthPage extends StatelessWidget {
           // If the user is logged in
           if (snapshot.hasData) {
             User? user = snapshot.data;
-            return HomeScreen(uid: user!.uid); // Ensure the correct named parameter
+            return HomeScreen(
+                uid: user!.uid); // Ensure the correct named parameter
           } else {
             // If the user is not logged in
             return OnboardingPage();

@@ -79,7 +79,9 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
           onPressed: () {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => OnboardingPage()), // Navigate to the onboarding page
+              MaterialPageRoute(
+                  builder: (context) =>
+                      OnboardingPage()), // Navigate to the onboarding page
               (Route<dynamic> route) => false, // Remove all previous routes
             );
           },
@@ -118,7 +120,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
             SizedBox(
               height: 590,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -147,7 +150,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _firstNameController,
@@ -166,7 +170,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _middleNameController,
@@ -185,7 +190,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(100),
                         ],
                         controller: _lastNameController,
@@ -213,7 +219,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                             if (text.length == 2 || text.length == 5) {
                               return TextEditingValue(
                                 text: '$text/',
-                                selection: TextSelection.collapsed(offset: text.length + 1),
+                                selection: TextSelection.collapsed(
+                                    offset: text.length + 1),
                               );
                             }
                             return newValue;
@@ -274,7 +281,8 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (context) => SignInPage()),
+                                MaterialPageRoute(
+                                    builder: (context) => SignInPage()),
                               );
                             },
                             child: const Text(

@@ -45,7 +45,8 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
 
     try {
       // Create a new user with email and password
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: widget.email,
         password: widget.password,
       );
@@ -79,7 +80,8 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
         _showErrorDialog(context, "An error occurred. Please try again.");
       }
     } catch (error) {
-      _showErrorDialog(context, "An unexpected error occurred. Please try again.");
+      _showErrorDialog(
+          context, "An unexpected error occurred. Please try again.");
     }
   }
 
@@ -146,7 +148,8 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
             SizedBox(
               height: 700,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -224,7 +227,9 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                         ),
                         IconButton(
                           icon: Icon(
-                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                            _isPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
                           onPressed: () {
                             setState(() {
@@ -240,7 +245,8 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                         width: 315,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _signUpUser, // Trigger the Firestore save on button press
+                          onPressed:
+                              _signUpUser, // Trigger the Firestore save on button press
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
