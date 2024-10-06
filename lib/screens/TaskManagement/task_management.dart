@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/screens/TaskCreation/task_creation.dart';
 
 class TaskManagementScreen extends StatefulWidget {
   @override
@@ -196,7 +197,15 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               ),
-              onPressed: () {}, // Functionality to add task
+              onPressed: () {
+                // Navigate to task creation screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          TaskCreationScreen()), // Replace with your TaskCreationScreen widget
+                );
+              },
               child: const Text(
                 "Add Task",
                 style: TextStyle(color: Colors.white),
