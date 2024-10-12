@@ -68,30 +68,40 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
 
   Future<void> _createTaskInFirestore() async {
     String taskName = _taskNameController.text;
-    String dueDate = _dueDateController.text;
-    String startTime = _startTimeController.text;
-    String endTime = _endTimeController.text;
+    String dueDateString = _dueDateController.text;
+    String startTimeString = _startTimeController.text;
+    String endTimeString = _endTimeController.text;
     String description = _descriptionController.text;
 
     // Get the current user's ID
     String? userId = FirebaseAuth.instance.currentUser?.uid;
 
+    // Convert strings to DateTime objects
+    DateTime? dueDate = dueDateString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
+        : null;
+    DateTime? startTime = startTimeString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(startTimeString)
+        : null;
+    DateTime? endTime = endTimeString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
+        : null;
+
     // Add to Firestore if fields are valid
     if (taskName.isNotEmpty &&
-        dueDate.isNotEmpty &&
-        startTime.isNotEmpty &&
-        endTime.isNotEmpty &&
+        dueDate != null &&
+        startTime != null &&
+        endTime != null &&
         userId != null) {
-      // Ensure userId is not null
       CollectionReference tasks =
           FirebaseFirestore.instance.collection('tasks');
 
       try {
         await tasks.add({
           'taskName': taskName,
-          'dueDate': dueDate,
-          'startTime': startTime,
-          'endTime': endTime,
+          'dueDate': Timestamp.fromDate(dueDate), // Save as Timestamp
+          'startTime': Timestamp.fromDate(startTime), // Save as Timestamp
+          'endTime': Timestamp.fromDate(endTime), // Save as Timestamp
           'description': description,
           'priority': _priority,
           'urgency': _urgency,
@@ -109,7 +119,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         // Navigate back to Task Management page after creation
         Navigator.pop(context);
       } catch (e) {
-        // Handle error
+        print("Error creating task: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to create task.')),
         );
@@ -331,20 +341,27 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       });
                     }),
                     const SizedBox(height: 25),
-                    ElevatedButton(
-                      onPressed: _createTaskInFirestore,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.all(12),
-                        backgroundColor: const Color(0xFF1B8B60),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Create Task',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
+                    Center(
+                      child: SizedBox(
+                        width: 315,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed:
+                              _createTaskInFirestore, // Trigger the Firestore save on button press
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor: const Color(0xFF2C3C3C),
+                          ),
+                          child: const Text(
+                            "CREATE TASK",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                     ),

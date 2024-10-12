@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TaskManagementScreen extends StatefulWidget {
   @override
@@ -14,17 +16,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   late PageController _pageController;
   late int _currentYear;
   late int _currentMonthIndex;
+  List<DocumentSnapshot> _tasks = [];
 
   @override
   void initState() {
     super.initState();
     _updateStartOfWeek(_selectedDay);
     _currentYear = _selectedDay.year;
-    _currentMonthIndex = _selectedDay.month - 1; // Month index (0-11)
+    _currentMonthIndex = _selectedDay.month - 1;
     _pageController = PageController(
-      initialPage: 5000, // Arbitrary large number for infinite week navigation
-      viewportFraction: 1.0, // Full width for each week
+      initialPage: 5000,
+      viewportFraction: 1.0,
     );
+    _fetchTasks();
   }
 
   @override
@@ -33,24 +37,44 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     super.dispose();
   }
 
-  // Set start of the week to the selected date's week
   void _updateStartOfWeek(DateTime selectedDate) {
-    _startOfWeek =
-        selectedDate.subtract(Duration(days: selectedDate.weekday % 7));
+    int daysFromSunday = selectedDate.weekday == 7 ? 0 : selectedDate.weekday;
+    _startOfWeek = selectedDate.subtract(Duration(days: daysFromSunday));
   }
 
-  // Navigate to the week that corresponds to the page index
   DateTime _getStartOfWeekFromIndex(int index) {
-    return _startOfWeek.add(Duration(days: (index - 5000) * 7));
+    int weeksFromInitialPage = index - 5000;
+    return _startOfWeek.add(Duration(days: weeksFromInitialPage * 7));
   }
 
   void _onDaySelected(DateTime day) {
     setState(() {
       _selectedDay = day;
+      _fetchTasks();
     });
   }
 
-  // Show the year and month picker
+  void _fetchTasks() async {
+    try {
+      String uid = FirebaseAuth.instance.currentUser!.uid;
+      DateTime startOfWeek = _startOfWeek;
+      DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
+
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: uid)
+          .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
+          .where('startTime', isLessThan: endOfWeek)
+          .get();
+
+      setState(() {
+        _tasks = querySnapshot.docs;
+      });
+    } catch (e) {
+      print("Error fetching tasks: $e");
+    }
+  }
+
   void _showYearMonthPicker(BuildContext context) {
     showDialog(
       context: context,
@@ -109,11 +133,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context); // Close picker
-                    _updateStartOfWeek(
-                        _selectedDay); // Update week to first week of the selected month
-                    _pageController.jumpToPage(5000); // Jump to the new week
-                    setState(() {});
+                    Navigator.pop(context);
+                    _updateStartOfWeek(_selectedDay);
+                    _pageController.jumpToPage(5000);
+                    setState(() {
+                      _fetchTasks();
+                    });
                   },
                   child: const Text("Pick Date"),
                 ),
@@ -126,55 +151,51 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   List<Widget> _buildDayPicker(DateTime startOfWeek) {
-    List<Widget> dayWidgets = [];
     List<String> weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    for (int i = 0; i < 7; i++) {
+    return List.generate(7, (i) {
       DateTime day = startOfWeek.add(Duration(days: i));
       bool isSelected = day.day == _selectedDay.day &&
           day.month == _selectedDay.month &&
           day.year == _selectedDay.year;
 
-      dayWidgets.add(
-        GestureDetector(
-          onTap: () => _onDaySelected(day),
-          child: Column(
-            children: [
-              Text(
-                weekdays[day.weekday % 7],
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: day.weekday == DateTime.saturday ||
-                          day.weekday == DateTime.sunday
-                      ? Colors.red
-                      : Colors.black,
-                ),
+      return GestureDetector(
+        onTap: () => _onDaySelected(day),
+        child: Column(
+          children: [
+            Text(
+              weekdays[day.weekday % 7 == 0 ? 6 : day.weekday - 1],
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: day.weekday == DateTime.saturday ||
+                        day.weekday == DateTime.sunday
+                    ? Colors.red
+                    : Colors.black,
               ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.all(10.0),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.blueAccent : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '${day.day}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.black,
-                    ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(10.0),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.blueAccent : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : Colors.black,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
-    }
-    return dayWidgets;
+    });
   }
 
   @override
@@ -184,58 +205,196 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         title: GestureDetector(
           onTap: () => _showYearMonthPicker(context),
           child: Text(
-            DateFormat('MMMM yyyy').format(_selectedDay),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            DateFormat('MMMM, yyyy').format(_selectedDay),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2C3C3C),
+            ),
           ),
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF2C3C3C),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: ElevatedButton(
               onPressed: () {
-                // Navigate to task creation screen
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) =>
-                          TaskCreationScreen()), // Replace with your TaskCreationScreen widget
+                    builder: (context) => TaskCreationScreen(),
+                  ),
                 );
               },
-              child: const Text(
-                "Add Task",
-                style: TextStyle(color: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    const Color(0xFF2C3C3C), // Background color of the button
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0), // Rounded corners
+                ),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 10.0,
+                    horizontal: 16.0), // Padding inside the button
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.add, color: Colors.white), // Icon color
+                  SizedBox(width: 8.0), // Space between icon and text
+                  Text(
+                    'Create Task', // Button text
+                    style: TextStyle(
+                      color: Colors.white, // Text color
+                      fontSize: 16.0, // Text size
+                      fontWeight: FontWeight.bold, // Text weight
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 8),
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.horizontal,
-              physics: ClampingScrollPhysics(), // Prevents excessive scrolling
-              onPageChanged: (index) {
-                // Update the start of the week based on the page index
-                setState(() {
-                  _startOfWeek = _getStartOfWeekFromIndex(index);
-                });
-              },
-              itemBuilder: (context, index) {
-                DateTime weekStart = _getStartOfWeekFromIndex(index);
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: _buildDayPicker(weekStart),
-                );
-              },
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 90,
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() {
+                    _startOfWeek = _getStartOfWeekFromIndex(index);
+                    _fetchTasks();
+                  });
+                },
+                itemBuilder: (context, index) {
+                  DateTime weekStart = _getStartOfWeekFromIndex(index);
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: _buildDayPicker(weekStart),
+                  );
+                },
+              ),
             ),
+            const SizedBox(height: 16),
+            _buildTaskSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 16.0), // Left and right padding
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding:
+                const EdgeInsets.only(bottom: 16.0), // Space below the title
+            child: Text(
+              "Tasks",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          _tasks.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    'No tasks available for the selected day.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                )
+              : ListView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  itemCount: _tasks.length,
+                  itemBuilder: (context, index) {
+                    DocumentSnapshot task = _tasks[index];
+                    DateTime startTime =
+                        (task['startTime'] as Timestamp?)?.toDate() ??
+                            DateTime.now();
+                    DateTime dueDate =
+                        (task['endTime'] as Timestamp?)?.toDate() ??
+                            DateTime.now();
+                    String name = task['taskName'] ?? 'Unnamed Task';
+
+                    String formattedStartTime =
+                        DateFormat('hh:mm a').format(startTime);
+                    String formattedDueDate =
+                        DateFormat('yyyy-MM-dd').format(dueDate);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                          bottom: 16.0), // Space between tasks
+                      child: _buildProgressTask(
+                          name, formattedDueDate, formattedStartTime),
+                    );
+                  },
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressTask(String taskName, String dueDate, String startTime) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: Offset(0, 2), // Changes position of shadow
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.task, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  taskName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                Text(
+                  'Due: $dueDate | Start: $startTime',
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.grey),
+            onPressed: () {
+              // Handle options button
+            },
           ),
         ],
       ),
