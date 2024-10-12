@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mellow/auth/auth_page.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mellow/auth/signin/sign_in.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/screens/HomeScreen/home_screen.dart';
@@ -30,7 +30,8 @@ class MellowApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.grey),
         ),
       ),
-      home: AuthPage(), // This page decides where to navigate based on user authentication
+      home:
+          AuthPage(), // This page decides where to navigate based on user authentication
       routes: {
         '/signin': (context) => SignInPage(), // SignInPage route
         '/signup': (context) => SignUpPersonalDetails(), // SignUpPage route
@@ -43,7 +44,7 @@ class MellowApp extends StatelessWidget {
             return SignInPage(); // Redirect to sign-in if no user is logged in
           }
         },
-        '/profile': (context) => const ProfilePage(), 
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }

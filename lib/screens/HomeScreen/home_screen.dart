@@ -17,14 +17,13 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0; // Track the selected bottom navigation
 
   // Define a list of pages to show based on the selected index
   late final List<Widget> _pages = [
     HomeScreenContent(uid: widget.uid), // Pass UID to HomeScreenContent
-    const TaskManagementScreen(),
+    TaskManagementScreen(),
     const CollaborationScreen(),
     const AnalyticsScreen(),
   ];

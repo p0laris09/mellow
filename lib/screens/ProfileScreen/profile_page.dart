@@ -55,18 +55,22 @@ class _ProfilePageState extends State<ProfilePage> {
           } else if (snapshot.hasData) {
             var data = snapshot.data!;
             // Convert full name to uppercase
-            String fullName = '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'.toUpperCase();
+            String fullName =
+                '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'
+                    .toUpperCase();
             String birthday = data['birthday'] ?? '';
             String university = data['university'] ?? '';
             String college = data['college'] ?? '';
             String program = data['program'] ?? '';
             String year = data['year'] ?? '';
             String phoneNumber = data['phoneNumber'] ?? '';
-            String email = data['email'] ?? FirebaseAuth.instance.currentUser?.email ?? '';
+            String email =
+                data['email'] ?? FirebaseAuth.instance.currentUser?.email ?? '';
 
             return SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -121,7 +125,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             // Navigate to UpdatePersonalInfo page
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => UpdatePersonalInfo()),
+                              MaterialPageRoute(
+                                  builder: (context) => UpdatePersonalInfo()),
                             );
                           },
                           style: ElevatedButton.styleFrom(
@@ -146,7 +151,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                         child: const Text(
                           'DELETE ACCOUNT',
-                          style: TextStyle(fontSize: 16, color: Colors.red, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -184,7 +192,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 4), // Space between label and value
                 Padding(
-                  padding: const EdgeInsets.only(left: 12.0), // Adjusted padding
+                  padding:
+                      const EdgeInsets.only(left: 12.0), // Adjusted padding
                   child: Text(
                     value,
                     style: const TextStyle(

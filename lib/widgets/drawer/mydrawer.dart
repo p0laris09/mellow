@@ -9,7 +9,8 @@ class MyDrawer extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut(); // Sign the user out
-      Navigator.pushReplacementNamed(context, '/signin'); // Navigate to the sign-in page
+      Navigator.pushReplacementNamed(
+          context, '/signin'); // Navigate to the sign-in page
     } catch (e) {
       print('Error signing out: $e'); // Handle any errors during sign-out
     }
@@ -17,7 +18,8 @@ class MyDrawer extends StatelessWidget {
 
   // Method to get the user's full name
   Future<String> _getUserFullName(String uid) async {
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final doc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
     if (doc.exists) {
       final data = doc.data();
       String firstName = data?['firstName'] ?? '';
@@ -33,7 +35,9 @@ class MyDrawer extends StatelessWidget {
 
     return Drawer(
       child: FutureBuilder<String>(
-        future: user != null ? _getUserFullName(user.uid) : Future.value('User'), // Get full name if user is logged in
+        future: user != null
+            ? _getUserFullName(user.uid)
+            : Future.value('User'), // Get full name if user is logged in
         builder: (context, snapshot) {
           return ListView(
             padding: EdgeInsets.zero,
@@ -78,7 +82,8 @@ class MyDrawer extends StatelessWidget {
               ListTile(
                 title: const Text('Profile'),
                 onTap: () {
-                  Navigator.pushNamed(context, '/profile'); // Navigate to the profile page
+                  Navigator.pushNamed(
+                      context, '/profile'); // Navigate to the profile page
                 },
               ),
               ListTile(

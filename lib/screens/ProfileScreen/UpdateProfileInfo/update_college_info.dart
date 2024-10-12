@@ -22,13 +22,20 @@ class UpdateCollegeInfo extends StatefulWidget {
 }
 
 class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
-  final TextEditingController _universityController = TextEditingController(text: "University of Makati");
+  final TextEditingController _universityController =
+      TextEditingController(text: "University of Makati");
   final TextEditingController _collegeController = TextEditingController();
   final TextEditingController _programController = TextEditingController();
-  
+
   // For dropdown
   String? _selectedYear;
-  final List<String> _years = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year']; // List of years
+  final List<String> _years = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    '5th Year'
+  ]; // List of years
 
   String? _errorMessage;
 
@@ -108,7 +115,8 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
             SizedBox(
               height: 590,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -157,7 +165,8 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(200),
                         ],
                         controller: _collegeController,
@@ -178,7 +187,8 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
                           LengthLimitingTextInputFormatter(200),
                         ],
                         controller: _programController,

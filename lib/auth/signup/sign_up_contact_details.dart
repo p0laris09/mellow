@@ -28,10 +28,12 @@ class SignUpContactDetails extends StatefulWidget {
 }
 
 class _SignUpContactDetailsState extends State<SignUpContactDetails> {
-  final TextEditingController _phoneController = TextEditingController(text: '+63 9');
+  final TextEditingController _phoneController =
+      TextEditingController(text: '+63 9');
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
@@ -69,7 +71,8 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
     // Validate phone number
     if (!isValidPhilippinePhoneNumber(_phoneController.text)) {
       setState(() {
-        _errorMessage = 'Please enter a valid Philippine phone number starting with +63 9XXXXXXXXX.';
+        _errorMessage =
+            'Please enter a valid Philippine phone number starting with +63 9XXXXXXXXX.';
       });
       return;
     }
@@ -86,7 +89,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
     if (!passwordRegExp.hasMatch(_passwordController.text)) {
       setState(() {
         _errorMessage =
-            'Password must be at least 8 characters, include an uppercase letter, a lowercase letter, a digit, and a special character.';
+            'Password must be at least 8 characters, include an uppercase letter,\na lowercase letter, a digit, and a special character.';
       });
       return;
     }
@@ -181,7 +184,8 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
             SizedBox(
               height: 590,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -193,7 +197,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                   children: [
                     // Error message container
                     Container(
-                      height: 70,
+                      height: 45,
                       margin: const EdgeInsets.only(bottom: 16),
                       alignment: Alignment.center,
                       child: _errorMessage != null
@@ -201,7 +205,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                               _errorMessage!,
                               style: const TextStyle(
                                 color: Colors.red,
-                                fontSize: 16,
+                                fontSize: 10,
                               ),
                               textAlign: TextAlign.center,
                             )
@@ -211,9 +215,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(14)
-                        ],
+                        inputFormatters: [LengthLimitingTextInputFormatter(14)],
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
@@ -232,9 +234,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(30)
-                        ],
+                        inputFormatters: [LengthLimitingTextInputFormatter(30)],
                         controller: _emailController,
                         decoration: const InputDecoration(
                           labelText: "Email",
@@ -299,7 +299,8 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                             ),
                             onPressed: () {
                               setState(() {
-                                _confirmPasswordVisible = !_confirmPasswordVisible;
+                                _confirmPasswordVisible =
+                                    !_confirmPasswordVisible;
                               });
                             },
                           ),

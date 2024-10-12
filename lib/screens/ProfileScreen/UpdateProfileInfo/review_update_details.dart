@@ -108,7 +108,8 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
             SizedBox(
               height: 700,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -155,7 +156,8 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
                         width: 315,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _updateUserData, // Trigger the Firestore update on button press
+                          onPressed:
+                              _updateUserData, // Trigger the Firestore update on button press
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
