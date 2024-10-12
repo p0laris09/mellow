@@ -39,11 +39,12 @@ class MellowApp extends StatelessWidget {
         '/home': (context) {
           User? user = FirebaseAuth.instance.currentUser;
           if (user != null) {
-            return HomeScreen(uid: user.uid); // Pass the user's uid correctly
+            return const HomeScreen(); // No need to pass uid
           } else {
             return SignInPage(); // Redirect to sign-in if no user is logged in
           }
         },
+
         '/profile': (context) => const ProfilePage(),
       },
     );

@@ -4,6 +4,8 @@ import 'package:mellow/screens/HomeScreen/home_screen.dart';
 import 'package:mellow/auth/onboarding/onboarding.dart';
 
 class AuthPage extends StatelessWidget {
+  const AuthPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -12,9 +14,7 @@ class AuthPage extends StatelessWidget {
         builder: (context, snapshot) {
           // If the user is logged in
           if (snapshot.hasData) {
-            User? user = snapshot.data;
-            return HomeScreen(
-                uid: user!.uid); // Ensure the correct named parameter
+            return const HomeScreen();
           } else {
             // If the user is not logged in
             return OnboardingPage();

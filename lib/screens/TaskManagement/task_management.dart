@@ -38,7 +38,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   void _updateStartOfWeek(DateTime selectedDate) {
-    int daysFromSunday = selectedDate.weekday == 7 ? 0 : selectedDate.weekday;
+    int daysFromSunday = selectedDate.weekday %
+        7; // Now Sunday (weekday == 7) is the start of the week
     _startOfWeek = selectedDate.subtract(Duration(days: daysFromSunday));
   }
 
@@ -76,6 +77,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   void _showYearMonthPicker(BuildContext context) {
+    int tempMonth = _currentMonthIndex;
+    int tempYear = _currentYear;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -94,37 +98,35 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       Expanded(
                         child: CupertinoPicker(
                           scrollController: FixedExtentScrollController(
-                              initialItem: _currentMonthIndex),
+                              initialItem: tempMonth),
                           itemExtent: 32.0,
                           onSelectedItemChanged: (int index) {
                             setState(() {
-                              _currentMonthIndex = index;
-                              _selectedDay =
-                                  DateTime(_currentYear, index + 1, 1);
+                              tempMonth = index;
                             });
                           },
                           children: List<Widget>.generate(12, (int index) {
                             return Center(
-                                child: Text(DateFormat('MMMM')
-                                    .format(DateTime(0, index + 1))));
+                              child: Text(DateFormat('MMMM')
+                                  .format(DateTime(0, index + 1))),
+                            );
                           }),
                         ),
                       ),
                       Expanded(
                         child: CupertinoPicker(
                           scrollController: FixedExtentScrollController(
-                              initialItem: _currentYear - 2000),
+                              initialItem: tempYear - 2000),
                           itemExtent: 32.0,
                           onSelectedItemChanged: (int index) {
                             setState(() {
-                              _currentYear = 2000 + index;
-                              _selectedDay = DateTime(
-                                  _currentYear, _currentMonthIndex + 1, 1);
+                              tempYear = 2000 + index;
                             });
                           },
                           children: List<Widget>.generate(102, (int index) {
                             return Center(
-                                child: Text((2000 + index).toString()));
+                              child: Text((2000 + index).toString()),
+                            );
                           }),
                         ),
                       ),
@@ -133,12 +135,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
-                    _updateStartOfWeek(_selectedDay);
-                    _pageController.jumpToPage(5000);
                     setState(() {
-                      _fetchTasks();
+                      _currentMonthIndex = tempMonth;
+                      _currentYear = tempYear;
+                      _selectedDay =
+                          DateTime(_currentYear, _currentMonthIndex + 1, 1);
+                      _updateStartOfWeek(_selectedDay);
+                      _pageController.jumpToPage(5000); // Reset to initial page
+                      _fetchTasks(); // Fetch tasks for the updated month/year
                     });
+                    Navigator.pop(context);
                   },
                   child: const Text("Pick Date"),
                 ),
@@ -164,7 +170,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         child: Column(
           children: [
             Text(
-              weekdays[day.weekday % 7 == 0 ? 6 : day.weekday - 1],
+              weekdays[day.weekday % 7],
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -202,8 +208,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading:
+            false, // Prevents the back button from appearing
         title: GestureDetector(
-          onTap: () => _showYearMonthPicker(context),
+          onTap: () {
+            _showYearMonthPicker(context); // Show the picker on tap
+          },
           child: Text(
             DateFormat('MMMM, yyyy').format(_selectedDay),
             style: const TextStyle(
@@ -226,25 +236,23 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    const Color(0xFF2C3C3C), // Background color of the button
+                backgroundColor: const Color(0xFF2C3C3C),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0), // Rounded corners
+                  borderRadius: BorderRadius.circular(8.0),
                 ),
                 padding: const EdgeInsets.symmetric(
-                    vertical: 10.0,
-                    horizontal: 16.0), // Padding inside the button
+                    vertical: 10.0, horizontal: 16.0),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.add, color: Colors.white), // Icon color
-                  SizedBox(width: 8.0), // Space between icon and text
+                  Icon(Icons.add, color: Colors.white),
+                  SizedBox(width: 8.0),
                   Text(
-                    'Create Task', // Button text
+                    'Create Task',
                     style: TextStyle(
-                      color: Colors.white, // Text color
-                      fontSize: 16.0, // Text size
-                      fontWeight: FontWeight.bold, // Text weight
+                      color: Colors.white,
+                      fontSize: 16.0,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],

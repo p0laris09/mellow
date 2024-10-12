@@ -38,13 +38,12 @@ class _SignInPageState extends State<SignInPage> {
       // Retrieve the User object
       User? user = userCredential.user;
 
-      // Navigate to HomeScreen and pass the user's uid
+      // Navigate to HomeScreen (no uid passed)
       if (user != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                HomeScreen(uid: user.uid), // Pass the user's uid
+            builder: (context) => const HomeScreen(), // No need to pass uid
           ),
         );
       }
