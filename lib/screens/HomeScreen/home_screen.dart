@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:mellow/screens/AnalyticsScreen/analytics_screen.dart';
 import 'package:mellow/screens/CollaborationScreen/collaboration_screen.dart';
@@ -7,22 +7,21 @@ import 'package:mellow/widgets/appbar/myappbar.dart';
 import 'package:mellow/widgets/bottomnav/mybottomnavbar.dart';
 import 'package:mellow/widgets/cards/task_card.dart';
 import 'package:mellow/widgets/drawer/mydrawer.dart';
+import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // For Firebase Authentication
 
 class HomeScreen extends StatefulWidget {
-  final String uid; // User ID passed as a parameter
-
-  const HomeScreen({super.key, required this.uid});
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0; // Track the selected bottom navigation
+  int _selectedIndex = 0;
 
-  // Define a list of pages to show based on the selected index
   late final List<Widget> _pages = [
-    HomeScreenContent(uid: widget.uid), // Pass UID to HomeScreenContent
+    HomeScreenContent(), // Removed UID passing as we will fetch it from FirebaseAuth
     TaskManagementScreen(),
     const CollaborationScreen(),
     const AnalyticsScreen(),
@@ -30,16 +29,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index; // Update the selected index
+      _selectedIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const MyAppBar(), // Use the existing MyAppBar widget
-      drawer: const MyDrawer(), // Use the existing MyDrawer widget
-      body: _pages[_selectedIndex], // Display the selected page
+      appBar: const MyAppBar(),
+      drawer: const MyDrawer(),
+      body: _pages[_selectedIndex],
       bottomNavigationBar: MyBottomNavBar(
         selectedIndex: _selectedIndex,
         onItemTapped: _onItemTapped,
@@ -48,21 +47,63 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Widget for the home page content
-class HomeScreenContent extends StatelessWidget {
-  final String uid; // Receive the user's UID
+class HomeScreenContent extends StatefulWidget {
+  const HomeScreenContent({super.key});
 
-  const HomeScreenContent({super.key, required this.uid});
+  @override
+  State<HomeScreenContent> createState() => _HomeScreenContentState();
+}
 
-  // Fetch the user's first name from Firestore using the UID
+class _HomeScreenContentState extends State<HomeScreenContent> {
+  List<DocumentSnapshot> _tasks = [];
+
+  DateTime get _startOfWeek {
+    DateTime now = DateTime.now();
+    return now.subtract(Duration(days: now.weekday - 1)); // Monday
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTasks();
+  }
+
   Future<String?> _getFirstName() async {
-    final DocumentSnapshot userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final user = FirebaseAuth.instance.currentUser; // Fetch current user
+    if (user == null) return null;
 
-    if (userDoc.exists) {
-      return userDoc['firstName'] as String?; // Retrieve the firstName field
+    final DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    return userDoc.exists ? userDoc['firstName'] as String? : null;
+  }
+
+  void _fetchTasks() async {
+    try {
+      String uid = FirebaseAuth.instance.currentUser!.uid;
+      DateTime startOfWeek = _startOfWeek;
+      DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
+
+      // Debug prints
+      print("Fetching tasks for user: $uid");
+      print("Start of week: $startOfWeek");
+      print("End of week: $endOfWeek");
+
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: uid)
+          .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
+          .where('startTime', isLessThan: endOfWeek)
+          .get();
+
+      setState(() {
+        _tasks = querySnapshot.docs;
+      });
+    } catch (e) {
+      print("Error fetching tasks: $e");
     }
-    return null; // Return null if no such document exists
   }
 
   @override
@@ -74,7 +115,7 @@ class HomeScreenContent extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
-        } else if (snapshot.hasData) {
+        } else {
           final String firstName = snapshot.data ?? 'User';
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
@@ -82,7 +123,7 @@ class HomeScreenContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Hello $firstName!", // Display the fetched first name
+                  "Hello $firstName!",
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -100,12 +141,10 @@ class HomeScreenContent extends StatelessWidget {
                 const SizedBox(height: 16),
                 _buildTaskCards(),
                 const SizedBox(height: 32),
-                _buildProgressSection(),
+                _buildTaskSection(), // Ensures tasks are displayed here
               ],
             ),
           );
-        } else {
-          return const Center(child: Text("Hello User!"));
         }
       },
     );
@@ -126,71 +165,157 @@ class HomeScreenContent extends StatelessWidget {
             project: "Project 2",
             title: "Back-End Development",
             date: "20 October 2024",
-            opacity: 0.5, // Less visible
+            opacity: 0.5,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProgressSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Progress",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
+  Widget _buildTaskSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Text(
+              "Tasks",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        _buildProgressTask("Design Changes", "2 Days ago"),
-        const SizedBox(height: 8),
-        _buildProgressTask("API Integration", "3 Days ago"),
-      ],
+          // Corrected logic for task display to ensure all tasks are rendered
+          _tasks.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    'No tasks available for the current week.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                )
+              : ListView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  itemCount: _tasks.length,
+                  itemBuilder: (context, index) {
+                    DocumentSnapshot task = _tasks[index];
+                    DateTime startTime =
+                        (task['startTime'] as Timestamp?)?.toDate() ??
+                            DateTime.now();
+                    DateTime dueDate =
+                        (task['endTime'] as Timestamp?)?.toDate() ??
+                            DateTime.now();
+                    String name = task['taskName'] ?? 'Unnamed Task';
+
+                    String formattedStartTime =
+                        DateFormat('hh:mm a').format(startTime);
+                    String formattedDueDate =
+                        DateFormat('yyyy-MM-dd').format(dueDate);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: _buildProgressTask(
+                          name,
+                          formattedDueDate,
+                          formattedStartTime,
+                          startTime, // Pass start time
+                          dueDate // Pass due date
+                          ),
+                    );
+                  },
+                ),
+        ],
+      ),
     );
   }
 
-  Widget _buildProgressTask(String taskName, String taskDate) {
+  Widget _buildProgressTask(String taskName, String dueDate, String startTime,
+      DateTime taskStartTime, DateTime taskDueDate) {
+    DateTime now = DateTime.now();
+    String taskStatus;
+    Color iconColor;
+
+    // Determine the status and icon color based on the time comparison
+    if (now.isAfter(taskDueDate)) {
+      taskStatus = "Overdue";
+      iconColor = Colors.red;
+    } else if (now.isAfter(taskStartTime) && now.isBefore(taskDueDate)) {
+      taskStatus = "Ongoing";
+      iconColor = Colors.green;
+    } else {
+      taskStatus = "Pending";
+      iconColor = Colors.grey;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(
+          vertical: 8), // Adding margin to increase space between task cards
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2), // Changes position of shadow
+          ),
+        ],
       ),
       child: Row(
         children: [
+          // Task icon with dynamic color based on task status
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey[800],
+              color: iconColor, // Use the dynamic icon color
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.task, color: Colors.white),
           ),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                taskName,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  taskName,
+                  style: TextStyle(
+                    fontSize: 18, // Increased font size for better visibility
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
                 ),
-              ),
-              Text(
-                taskDate,
-                style: TextStyle(color: Colors.grey[500]),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  'Due: $dueDate | Start: $startTime',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Displaying task status
+                Text(
+                  'Status: $taskStatus',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        iconColor, // Matching the color of the status text with the icon
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
           IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            icon: const Icon(Icons.more_vert, color: Colors.grey),
             onPressed: () {
               // Handle options button
             },

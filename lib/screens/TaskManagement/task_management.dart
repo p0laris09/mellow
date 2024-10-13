@@ -28,7 +28,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       initialPage: 5000,
       viewportFraction: 1.0,
     );
-    _fetchTasks();
+    _fetchTasks(); // Fetch tasks initially
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _fetchTasks(); // Fetch tasks when the widget dependencies change
   }
 
   @override
@@ -38,7 +44,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   void _updateStartOfWeek(DateTime selectedDate) {
-    int daysFromSunday = selectedDate.weekday == 7 ? 0 : selectedDate.weekday;
+    int daysFromSunday =
+        selectedDate.weekday % 7; // Sunday is the start of the week
     _startOfWeek = selectedDate.subtract(Duration(days: daysFromSunday));
   }
 
@@ -76,6 +83,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   void _showYearMonthPicker(BuildContext context) {
+    int tempMonth = _currentMonthIndex;
+    int tempYear = _currentYear;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -94,37 +104,35 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       Expanded(
                         child: CupertinoPicker(
                           scrollController: FixedExtentScrollController(
-                              initialItem: _currentMonthIndex),
+                              initialItem: tempMonth),
                           itemExtent: 32.0,
                           onSelectedItemChanged: (int index) {
                             setState(() {
-                              _currentMonthIndex = index;
-                              _selectedDay =
-                                  DateTime(_currentYear, index + 1, 1);
+                              tempMonth = index;
                             });
                           },
                           children: List<Widget>.generate(12, (int index) {
                             return Center(
-                                child: Text(DateFormat('MMMM')
-                                    .format(DateTime(0, index + 1))));
+                              child: Text(DateFormat('MMMM')
+                                  .format(DateTime(0, index + 1))),
+                            );
                           }),
                         ),
                       ),
                       Expanded(
                         child: CupertinoPicker(
                           scrollController: FixedExtentScrollController(
-                              initialItem: _currentYear - 2000),
+                              initialItem: tempYear - 2000),
                           itemExtent: 32.0,
                           onSelectedItemChanged: (int index) {
                             setState(() {
-                              _currentYear = 2000 + index;
-                              _selectedDay = DateTime(
-                                  _currentYear, _currentMonthIndex + 1, 1);
+                              tempYear = 2000 + index;
                             });
                           },
                           children: List<Widget>.generate(102, (int index) {
                             return Center(
-                                child: Text((2000 + index).toString()));
+                              child: Text((2000 + index).toString()),
+                            );
                           }),
                         ),
                       ),
@@ -133,12 +141,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
-                    _updateStartOfWeek(_selectedDay);
-                    _pageController.jumpToPage(5000);
                     setState(() {
-                      _fetchTasks();
+                      _currentMonthIndex = tempMonth;
+                      _currentYear = tempYear;
+                      _selectedDay =
+                          DateTime(_currentYear, _currentMonthIndex + 1, 1);
+                      _updateStartOfWeek(_selectedDay);
+                      _pageController.jumpToPage(5000); // Reset to initial page
+                      _fetchTasks(); // Fetch tasks for the updated month/year
                     });
+                    Navigator.pop(context);
                   },
                   child: const Text("Pick Date"),
                 ),
@@ -164,7 +176,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         child: Column(
           children: [
             Text(
-              weekdays[day.weekday % 7 == 0 ? 6 : day.weekday - 1],
+              weekdays[day.weekday % 7],
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -202,8 +214,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading:
+            false, // Prevents the back button from appearing
         title: GestureDetector(
-          onTap: () => _showYearMonthPicker(context),
+          onTap: () {
+            _showYearMonthPicker(context); // Show the picker on tap
+          },
           child: Text(
             DateFormat('MMMM, yyyy').format(_selectedDay),
             style: const TextStyle(
@@ -226,25 +242,23 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    const Color(0xFF2C3C3C), // Background color of the button
+                backgroundColor: const Color(0xFF2C3C3C),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0), // Rounded corners
+                  borderRadius: BorderRadius.circular(8.0),
                 ),
                 padding: const EdgeInsets.symmetric(
-                    vertical: 10.0,
-                    horizontal: 16.0), // Padding inside the button
+                    vertical: 10.0, horizontal: 16.0),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.add, color: Colors.white), // Icon color
-                  SizedBox(width: 8.0), // Space between icon and text
+                  Icon(Icons.add, color: Colors.white),
+                  SizedBox(width: 8.0),
                   Text(
-                    'Create Task', // Button text
+                    'Create Task',
                     style: TextStyle(
-                      color: Colors.white, // Text color
-                      fontSize: 16.0, // Text size
-                      fontWeight: FontWeight.bold, // Text weight
+                      color: Colors.white,
+                      fontSize: 16.0,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
@@ -266,7 +280,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 onPageChanged: (index) {
                   setState(() {
                     _startOfWeek = _getStartOfWeekFromIndex(index);
-                    _fetchTasks();
+                    // No need to manually fetch tasks here; StreamBuilder will handle updates
                   });
                 },
                 itemBuilder: (context, index) {
@@ -279,7 +293,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            _buildTaskSection(),
+            _buildTaskSection(), // This will now use StreamBuilder for real-time updates
           ],
         ),
       ),
@@ -287,15 +301,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Widget _buildTaskSection() {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    DateTime startOfWeek = _startOfWeek;
+    DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
+
     return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 16.0), // Left and right padding
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding:
-                const EdgeInsets.only(bottom: 16.0), // Space below the title
+            padding: const EdgeInsets.only(bottom: 16.0),
             child: Text(
               "Tasks",
               style: TextStyle(
@@ -305,49 +321,94 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
               ),
             ),
           ),
-          _tasks.isEmpty
-              ? Padding(
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('tasks')
+                .where('userId', isEqualTo: uid)
+                .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
+                .where('startTime', isLessThan: endOfWeek)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text("Error loading tasks: ${snapshot.error}");
+              }
+
+              if (!snapshot.hasData) {
+                return Center(child: CircularProgressIndicator());
+              }
+
+              var taskDocs = snapshot.data!.docs;
+
+              if (taskDocs.isEmpty) {
+                return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
                     'No tasks available for the selected day.',
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
-                )
-              : ListView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  itemCount: _tasks.length,
-                  itemBuilder: (context, index) {
-                    DocumentSnapshot task = _tasks[index];
-                    DateTime startTime =
-                        (task['startTime'] as Timestamp?)?.toDate() ??
-                            DateTime.now();
-                    DateTime dueDate =
-                        (task['endTime'] as Timestamp?)?.toDate() ??
-                            DateTime.now();
-                    String name = task['taskName'] ?? 'Unnamed Task';
+                );
+              }
 
-                    String formattedStartTime =
-                        DateFormat('hh:mm a').format(startTime);
-                    String formattedDueDate =
-                        DateFormat('yyyy-MM-dd').format(dueDate);
+              return ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: taskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = taskDocs[index];
+                  DateTime startTime =
+                      (task['startTime'] as Timestamp?)?.toDate() ??
+                          DateTime.now();
+                  DateTime dueDate =
+                      (task['endTime'] as Timestamp?)?.toDate() ??
+                          DateTime.now();
+                  String name = task['taskName'] ?? 'Unnamed Task';
 
-                    return Padding(
-                      padding: const EdgeInsets.only(
-                          bottom: 16.0), // Space between tasks
-                      child: _buildProgressTask(
-                          name, formattedDueDate, formattedStartTime),
-                    );
-                  },
-                ),
+                  String formattedStartTime =
+                      DateFormat('hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd').format(dueDate);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: _buildProgressTask(
+                        name,
+                        formattedDueDate,
+                        formattedStartTime,
+                        startTime, // Pass start time
+                        dueDate // Pass due date
+                        ),
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProgressTask(String taskName, String dueDate, String startTime) {
+  Widget _buildProgressTask(String taskName, String dueDate, String startTime,
+      DateTime taskStartTime, DateTime taskDueDate) {
+    DateTime now = DateTime.now();
+    String taskStatus;
+    Color iconColor;
+
+    // Determine the status and icon color based on the time comparison
+    if (now.isAfter(taskDueDate)) {
+      taskStatus = "Overdue";
+      iconColor = Colors.red;
+    } else if (now.isAfter(taskStartTime) && now.isBefore(taskDueDate)) {
+      taskStatus = "Ongoing";
+      iconColor = Colors.green;
+    } else {
+      taskStatus = "Pending";
+      iconColor = Colors.grey;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(
+          vertical: 8), // Adding margin to increase space between task cards
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -356,16 +417,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             color: Colors.grey.withOpacity(0.2),
             spreadRadius: 1,
             blurRadius: 4,
-            offset: Offset(0, 2), // Changes position of shadow
+            offset: const Offset(0, 2), // Changes position of shadow
           ),
         ],
       ),
       child: Row(
         children: [
+          // Task icon with dynamic color based on task status
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey[800],
+              color: iconColor, // Use the dynamic icon color
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.task, color: Colors.white),
@@ -378,14 +440,29 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 Text(
                   taskName,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18, // Increased font size for better visibility
                     fontWeight: FontWeight.bold,
                     color: Colors.grey[800],
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   'Due: $dueDate | Start: $startTime',
-                  style: TextStyle(color: Colors.grey[500]),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Displaying task status
+                Text(
+                  'Status: $taskStatus',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        iconColor, // Matching the color of the status text with the icon
+                  ),
                 ),
               ],
             ),
