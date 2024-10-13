@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/screens/TaskManagement/task_management.dart';
 
 class TaskCreationScreen extends StatefulWidget {
   const TaskCreationScreen({super.key});
@@ -73,10 +74,8 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     String endTimeString = _endTimeController.text;
     String description = _descriptionController.text;
 
-    // Get the current user's ID
     String? userId = FirebaseAuth.instance.currentUser?.uid;
 
-    // Convert strings to DateTime objects
     DateTime? dueDate = dueDateString.isNotEmpty
         ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
         : null;
@@ -87,36 +86,49 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
         : null;
 
-    // Add to Firestore if fields are valid
     if (taskName.isNotEmpty &&
         dueDate != null &&
         startTime != null &&
         endTime != null &&
         userId != null) {
+      // Get current time
+      DateTime currentTime = DateTime.now();
+
+      // Determine initial status
+      String status;
+      if (currentTime.isBefore(startTime)) {
+        status = 'pending'; // Task hasn't started yet
+      } else if (currentTime.isAfter(startTime) &&
+          currentTime.isBefore(dueDate)) {
+        status = 'ongoing'; // Task is ongoing
+      } else {
+        status = 'overdue'; // Task is overdue
+      }
+
       CollectionReference tasks =
           FirebaseFirestore.instance.collection('tasks');
 
       try {
         await tasks.add({
           'taskName': taskName,
-          'dueDate': Timestamp.fromDate(dueDate), // Save as Timestamp
-          'startTime': Timestamp.fromDate(startTime), // Save as Timestamp
-          'endTime': Timestamp.fromDate(endTime), // Save as Timestamp
+          'dueDate': Timestamp.fromDate(dueDate),
+          'startTime': Timestamp.fromDate(startTime),
+          'endTime': Timestamp.fromDate(endTime),
           'description': description,
           'priority': _priority,
           'urgency': _urgency,
           'importance': _importance,
           'complexity': _complexity,
-          'createdAt': Timestamp.now(), // Firestore timestamp
-          'userId': userId, // Add userId to the task document
+          'createdAt': Timestamp.now(),
+          'userId': userId,
+          'status': status, // Set initial status
         });
 
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Task created successfully!')),
         );
 
-        // Navigate back to Task Management page after creation
+        // Navigate back to TaskManagementScreen after task creation
         Navigator.pop(context);
       } catch (e) {
         print("Error creating task: $e");
@@ -129,41 +141,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         const SnackBar(content: Text('Please fill all required fields.')),
       );
     }
-  }
-
-  Widget _buildSlider(
-      String label, double value, ValueChanged<double> onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("Low"),
-            Expanded(
-              child: Slider(
-                value: value,
-                min: 1,
-                max: 3,
-                divisions: 2,
-                onChanged: onChanged,
-                activeColor: Colors.blue,
-                label: value == 1
-                    ? 'Low'
-                    : value == 2
-                        ? 'Mid'
-                        : 'High',
-              ),
-            ),
-            const Text("High"),
-          ],
-        ),
-      ],
-    );
   }
 
   @override
@@ -237,7 +214,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
             ),
             const SizedBox(height: 45),
             SizedBox(
-              height: 722,
+              height: 810,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -342,27 +319,17 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     }),
                     const SizedBox(height: 25),
                     Center(
-                      child: SizedBox(
-                        width: 315,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed:
-                              _createTaskInFirestore, // Trigger the Firestore save on button press
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            backgroundColor: const Color(0xFF2C3C3C),
+                      child: ElevatedButton(
+                        onPressed: _createTaskInFirestore,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 50,
+                            vertical: 20,
                           ),
-                          child: const Text(
-                            "CREATE TASK",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                            ),
-                          ),
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF2C3C3C),
                         ),
+                        child: const Text('Create Task'),
                       ),
                     ),
                   ],
@@ -372,6 +339,39 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSlider(
+      String label, double value, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Low', style: TextStyle(fontSize: 12)),
+            const Text('Medium', style: TextStyle(fontSize: 12)),
+            const Text('High', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        Slider(
+          value: value,
+          min: 1, // Start at 1
+          max: 3, // End at 3
+          divisions: 2, // Only 3 values: 1, 2, 3
+          label: value == 1
+              ? 'Low'
+              : value == 2
+                  ? 'Medium'
+                  : 'High',
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

@@ -220,7 +220,12 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16.0),
                       child: _buildProgressTask(
-                          name, formattedDueDate, formattedStartTime),
+                          name,
+                          formattedDueDate,
+                          formattedStartTime,
+                          startTime, // Pass start time
+                          dueDate // Pass due date
+                          ),
                     );
                   },
                 ),
@@ -229,9 +234,28 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
   }
 
-  Widget _buildProgressTask(String taskName, String dueDate, String startTime) {
+  Widget _buildProgressTask(String taskName, String dueDate, String startTime,
+      DateTime taskStartTime, DateTime taskDueDate) {
+    DateTime now = DateTime.now();
+    String taskStatus;
+    Color iconColor;
+
+    // Determine the status and icon color based on the time comparison
+    if (now.isAfter(taskDueDate)) {
+      taskStatus = "Overdue";
+      iconColor = Colors.red;
+    } else if (now.isAfter(taskStartTime) && now.isBefore(taskDueDate)) {
+      taskStatus = "Ongoing";
+      iconColor = Colors.green;
+    } else {
+      taskStatus = "Pending";
+      iconColor = Colors.grey;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(
+          vertical: 8), // Adding margin to increase space between task cards
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -240,16 +264,17 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             color: Colors.grey.withOpacity(0.2),
             spreadRadius: 1,
             blurRadius: 4,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 2), // Changes position of shadow
           ),
         ],
       ),
       child: Row(
         children: [
+          // Task icon with dynamic color based on task status
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey[800],
+              color: iconColor, // Use the dynamic icon color
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.task, color: Colors.white),
@@ -262,14 +287,29 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 Text(
                   taskName,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18, // Increased font size for better visibility
                     fontWeight: FontWeight.bold,
                     color: Colors.grey[800],
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   'Due: $dueDate | Start: $startTime',
-                  style: TextStyle(color: Colors.grey[500]),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Displaying task status
+                Text(
+                  'Status: $taskStatus',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        iconColor, // Matching the color of the status text with the icon
+                  ),
                 ),
               ],
             ),
