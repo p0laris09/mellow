@@ -8,12 +8,13 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      backgroundColor: const Color(0xFFF4F6F8),
       title: const Text(''),
       actions: [
         //For notifications
         IconButton(
           onPressed: () {
-            // Handle person icon press
+            // Handle notification icon press
           },
           icon: const Icon(Icons.notifications),
         ),
@@ -21,7 +22,7 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
         //For Messages
         IconButton(
           onPressed: () {
-            // Handle person icon press
+            // Handle message icon press
           },
           icon: const Icon(Icons.message_rounded),
         ),

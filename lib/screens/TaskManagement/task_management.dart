@@ -44,9 +44,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   void _updateStartOfWeek(DateTime selectedDate) {
-    int daysFromSunday =
-        selectedDate.weekday % 7; // Sunday is the start of the week
-    _startOfWeek = selectedDate.subtract(Duration(days: daysFromSunday));
+    int daysFromMonday =
+        (selectedDate.weekday - 1) % 7; // Monday as the start of the week
+    _startOfWeek = selectedDate.subtract(Duration(days: daysFromMonday));
   }
 
   DateTime _getStartOfWeekFromIndex(int index) {
@@ -64,14 +64,25 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   void _fetchTasks() async {
     try {
       String uid = FirebaseAuth.instance.currentUser!.uid;
-      DateTime startOfWeek = _startOfWeek;
-      DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
 
+      // Get the start of the selected day and end of the selected day
+      DateTime startOfDay = DateTime(
+          _selectedDay.year, _selectedDay.month, _selectedDay.day, 0, 0);
+      DateTime endOfDay = DateTime(
+          _selectedDay.year, _selectedDay.month, _selectedDay.day, 23, 59, 59);
+
+      // Query for tasks that start on or before the selected day and end on or after the selected day
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: uid)
-          .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
-          .where('startTime', isLessThan: endOfWeek)
+          .where('startTime',
+              isLessThanOrEqualTo:
+                  endOfDay) // Task starts before or on the selected day
+          .where('endTime',
+              isGreaterThanOrEqualTo:
+                  startOfDay) // Task ends after or on the selected day
+          .orderBy('startTime',
+              descending: false) // Ensure tasks are ordered by startTime
           .get();
 
       setState(() {
@@ -163,7 +174,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   List<Widget> _buildDayPicker(DateTime startOfWeek) {
-    List<String> weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     return List.generate(7, (i) {
       DateTime day = startOfWeek.add(Duration(days: i));
@@ -176,7 +187,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         child: Column(
           children: [
             Text(
-              weekdays[day.weekday % 7],
+              weekdays[(day.weekday - 1) % 7], // Weekdays start from Monday
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -213,7 +224,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF4F6F8),
         automaticallyImplyLeading:
             false, // Prevents the back button from appearing
         title: GestureDetector(
@@ -302,8 +315,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
   Widget _buildTaskSection() {
     String uid = FirebaseAuth.instance.currentUser!.uid;
-    DateTime startOfWeek = _startOfWeek;
-    DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
+
+    // Set the start and end time for the selected day
+    DateTime startOfDay =
+        DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 0, 0);
+    DateTime endOfDay = DateTime(
+        _selectedDay.year, _selectedDay.month, _selectedDay.day, 23, 59, 59);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -313,7 +330,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Text(
-              "Tasks",
+              "Tasks for ${DateFormat('EEEE, MMM d').format(_selectedDay)}",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -325,66 +342,109 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             stream: FirebaseFirestore.instance
                 .collection('tasks')
                 .where('userId', isEqualTo: uid)
-                .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
-                .where('startTime', isLessThan: endOfWeek)
+                .where('startTime',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+                .where('startTime',
+                    isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+                .orderBy('startTime',
+                    descending: false) // Order by both date and time
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Text("Error loading tasks: ${snapshot.error}");
               }
 
-              if (!snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
-              }
-
-              var taskDocs = snapshot.data!.docs;
-
-              if (taskDocs.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
-                    'No tasks available for the selected day.',
+                    'No tasks available for ${DateFormat('EEEE, MMM d').format(_selectedDay)}.',
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
                 );
               }
 
-              return ListView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                itemCount: taskDocs.length,
-                itemBuilder: (context, index) {
-                  DocumentSnapshot task = taskDocs[index];
-                  DateTime startTime =
-                      (task['startTime'] as Timestamp?)?.toDate() ??
-                          DateTime.now();
-                  DateTime dueDate =
-                      (task['endTime'] as Timestamp?)?.toDate() ??
-                          DateTime.now();
-                  String name = task['taskName'] ?? 'Unnamed Task';
+              var taskDocs = snapshot.data!.docs;
 
-                  String formattedStartTime =
-                      DateFormat('hh:mm a').format(startTime);
-                  String formattedDueDate =
-                      DateFormat('yyyy-MM-dd').format(dueDate);
+              // Fetch overdue tasks as well
+              List<Widget> overdueTasks = _fetchOverdueTasks(uid);
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _buildProgressTask(
-                        name,
-                        formattedDueDate,
-                        formattedStartTime,
-                        startTime, // Pass start time
-                        dueDate // Pass due date
-                        ),
-                  );
-                },
+              return Column(
+                children: [
+                  ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    itemCount: taskDocs.length,
+                    itemBuilder: (context, index) {
+                      DocumentSnapshot task = taskDocs[index];
+                      DateTime startTime =
+                          (task['startTime'] as Timestamp).toDate();
+                      DateTime dueDate =
+                          (task['endTime'] as Timestamp).toDate();
+                      String name = task['taskName'] ?? 'Unnamed Task';
+
+                      String formattedStartTime =
+                          DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                      String formattedDueDate =
+                          DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: _buildProgressTask(name, formattedDueDate,
+                            formattedStartTime, startTime, dueDate),
+                      );
+                    },
+                  ),
+                  if (overdueTasks.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: overdueTasks,
+                      ),
+                    ),
+                ],
               );
             },
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _fetchOverdueTasks(String uid) {
+    List<Widget> overdueTaskWidgets = [];
+
+    FirebaseFirestore.instance
+        .collection('tasks')
+        .where('userId', isEqualTo: uid)
+        .where('endTime', isLessThan: Timestamp.fromDate(DateTime.now()))
+        .where('status',
+            isNotEqualTo:
+                'Completed') // Only show overdue tasks that aren't completed
+        .orderBy('endTime', descending: true)
+        .get()
+        .then((querySnapshot) {
+      for (var task in querySnapshot.docs) {
+        DateTime startTime = (task['startTime'] as Timestamp).toDate();
+        DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+        String name = task['taskName'] ?? 'Unnamed Task';
+        String formattedStartTime =
+            DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+        String formattedDueDate =
+            DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+
+        overdueTaskWidgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: _buildProgressTask(
+                name, formattedDueDate, formattedStartTime, startTime, dueDate),
+          ),
+        );
+      }
+    });
+
+    return overdueTaskWidgets;
   }
 
   Widget _buildProgressTask(String taskName, String dueDate, String startTime,
@@ -445,15 +505,23 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                     color: Colors.grey[800],
                   ),
                 ),
-                const SizedBox(height: 4),
                 Text(
-                  'Due: $dueDate | Start: $startTime',
+                  'Start: $startTime',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[500],
                   ),
                 ),
                 const SizedBox(height: 4),
+                Text(
+                  'Due: $dueDate',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 4),
+
                 // Displaying task status
                 Text(
                   'Status: $taskStatus',

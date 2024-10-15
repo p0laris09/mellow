@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:mellow/screens/ProfileScreen/UpdateProfileInfo/update_personal_info.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -11,22 +14,77 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  String? _profileImageUrl;
+  final ImagePicker _picker = ImagePicker();
+  Future<Map<String, dynamic>>? _userProfileFuture; // Updated: No late keyword
+
+  @override
+  void initState() {
+    super.initState();
+    _userProfileFuture = _fetchUserProfile(); // Initialize the future
+  }
+
   // Method to fetch user data from Firestore
   Future<Map<String, dynamic>> _fetchUserProfile() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      DocumentSnapshot userProfile = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      try {
+        DocumentSnapshot userProfile = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
 
-      if (userProfile.exists) {
-        return userProfile.data() as Map<String, dynamic>; // Return user data
-      } else {
-        throw Exception('User profile does not exist');
+        if (userProfile.exists) {
+          var data = userProfile.data() as Map<String, dynamic>;
+          setState(() {
+            _profileImageUrl =
+                data['profileImageUrl']; // Get the profile image URL
+          });
+          return data; // Return user data
+        } else {
+          throw Exception('User profile does not exist');
+        }
+      } catch (e) {
+        throw Exception('Error fetching user profile: $e');
       }
     } else {
       throw Exception('No user is currently logged in');
+    }
+  }
+
+  // Method to pick an image and upload to Firebase Storage
+  Future<void> _pickAndUploadImage() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile == null) return;
+
+      File file = File(pickedFile.path);
+
+      // Upload to Firebase Storage
+      String filePath = 'profile_images/${user.uid}.png';
+      await FirebaseStorage.instance.ref(filePath).putFile(file);
+
+      // Get the download URL
+      String downloadUrl =
+          await FirebaseStorage.instance.ref(filePath).getDownloadURL();
+
+      // Update Firestore with the image URL
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'profileImageUrl': downloadUrl,
+      });
+
+      // Update the profile image URL in the state
+      setState(() {
+        _profileImageUrl = downloadUrl;
+      });
+    } catch (e) {
+      print('Error uploading image: $e');
     }
   }
 
@@ -46,7 +104,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchUserProfile(), // Call the fetch method
+        future: _userProfileFuture, // Use the future initialized in initState
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -54,18 +112,18 @@ class _ProfilePageState extends State<ProfilePage> {
             return Center(child: Text('Error: ${snapshot.error}'));
           } else if (snapshot.hasData) {
             var data = snapshot.data!;
-            // Convert full name to uppercase
             String fullName =
                 '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'
                     .toUpperCase();
-            String birthday = data['birthday'] ?? '';
-            String university = data['university'] ?? '';
-            String college = data['college'] ?? '';
-            String program = data['program'] ?? '';
-            String year = data['year'] ?? '';
-            String phoneNumber = data['phoneNumber'] ?? '';
-            String email =
-                data['email'] ?? FirebaseAuth.instance.currentUser?.email ?? '';
+            String birthday = data['birthday'] ?? 'Not provided';
+            String university = data['university'] ?? 'Not provided';
+            String college = data['college'] ?? 'Not provided';
+            String program = data['program'] ?? 'Not provided';
+            String year = data['year'] ?? 'Not provided';
+            String phoneNumber = data['phoneNumber'] ?? 'Not provided';
+            String email = data['email'] ??
+                FirebaseAuth.instance.currentUser?.email ??
+                'Not provided';
 
             return SingleChildScrollView(
               child: Padding(
@@ -75,17 +133,24 @@ class _ProfilePageState extends State<ProfilePage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 20),
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.grey[200],
-                      child: const Icon(
-                        Icons.person,
-                        size: 50,
-                        color: Colors.teal,
+                    GestureDetector(
+                      onTap: _pickAndUploadImage,
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: _profileImageUrl != null
+                            ? NetworkImage(_profileImageUrl!)
+                            : null,
+                        child: _profileImageUrl == null
+                            ? const Icon(
+                                Icons.person,
+                                size: 50,
+                                color: Colors.teal,
+                              )
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Display full name in uppercase
                     Text(
                       fullName,
                       style: const TextStyle(
@@ -96,25 +161,13 @@ class _ProfilePageState extends State<ProfilePage> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),
-                    // Display the user details dynamically
                     _buildProfileDetail('Birthday', birthday),
                     _buildProfileDetail('University', university),
                     _buildProfileDetail('College', college),
                     _buildProfileDetail('Program', program),
                     _buildProfileDetail('Year', year),
                     _buildProfileDetail('Phone Number', phoneNumber),
-                    // Email section with edit icon
-                    _buildProfileDetail(
-                      'Email',
-                      email,
-                      trailing: IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.teal),
-                        onPressed: () {
-                          // Handle Edit Button Press
-                          print('Edit Email Clicked');
-                        },
-                      ),
-                    ),
+                    _buildProfileDetail('Email', email),
                     const SizedBox(height: 20),
                     Center(
                       child: SizedBox(
@@ -122,7 +175,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         height: 50,
                         child: ElevatedButton(
                           onPressed: () {
-                            // Navigate to UpdatePersonalInfo page
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -170,14 +222,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Helper method to build profile detail rows
   Widget _buildProfileDetail(String label, String value, {Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Column for label and value
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,14 +240,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 4), // Space between label and value
+                const SizedBox(height: 4),
                 Padding(
-                  padding:
-                      const EdgeInsets.only(left: 12.0), // Adjusted padding
+                  padding: const EdgeInsets.only(left: 12.0),
                   child: Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 19, // Slightly larger font size for the value
+                      fontSize: 19,
                       color: Colors.black,
                     ),
                   ),
@@ -205,7 +254,6 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
-          // Trailing icon for editing
           if (trailing != null) trailing,
         ],
       ),
