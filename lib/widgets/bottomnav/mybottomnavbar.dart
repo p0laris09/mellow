@@ -1,10 +1,8 @@
-// custom_bottom_nav_bar.dart
-
 import 'package:flutter/material.dart';
 
 class MyBottomNavBar extends StatelessWidget {
   final int selectedIndex;
-  final Function(int) onItemTapped; // A callback function to handle taps
+  final Function(int) onItemTapped;
 
   const MyBottomNavBar({
     super.key,
@@ -15,7 +13,7 @@ class MyBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
-      backgroundColor: Colors.blueGrey[900],
+      backgroundColor: const Color(0xFFF4F6F8), // This should set the color
       selectedItemColor: Colors.black,
       unselectedItemColor: Colors.grey[400],
       showSelectedLabels: false,
@@ -28,11 +26,11 @@ class MyBottomNavBar extends StatelessWidget {
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.calendar_month),
-          label: 'TaskManagement',
+          label: 'Task Management',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.group),
-          label: 'CollaborationSpace',
+          label: 'Collaboration Space',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.bar_chart),

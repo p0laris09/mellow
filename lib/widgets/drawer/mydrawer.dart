@@ -87,6 +87,10 @@ class MyDrawer extends StatelessWidget {
                 },
               ),
               ListTile(
+                title: const Text('Community'),
+                onTap: () {},
+              ),
+              ListTile(
                 title: const Text('Settings'),
                 onTap: () {
                   // Handle Press for settings

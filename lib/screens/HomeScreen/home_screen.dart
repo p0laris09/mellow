@@ -21,7 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   late final List<Widget> _pages = [
-    HomeScreenContent(), // Removed UID passing as we will fetch it from FirebaseAuth
+    const HomeScreenContent(), // Removed UID passing as we will fetch it from FirebaseAuth
     TaskManagementScreen(),
     const CollaborationScreen(),
     const AnalyticsScreen(),
@@ -36,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(
+          0xFFF4F6F8), // Ensure this contrasts with the BottomNavBar
       appBar: const MyAppBar(),
       drawer: const MyDrawer(),
       body: _pages[_selectedIndex],
@@ -213,9 +215,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     String name = task['taskName'] ?? 'Unnamed Task';
 
                     String formattedStartTime =
-                        DateFormat('hh:mm a').format(startTime);
+                        DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
                     String formattedDueDate =
-                        DateFormat('yyyy-MM-dd').format(dueDate);
+                        DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16.0),
@@ -294,7 +296,15 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Due: $dueDate | Start: $startTime',
+                  'Start: $startTime',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Due: $dueDate',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[500],
