@@ -1,8 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:mellow/auth/forgotpassword/forgot_password.dart';
 import 'package:mellow/auth/onboarding/onboarding.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
-import 'package:mellow/screens/HomeScreen/home_screen.dart';
+import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
 
 class SignInPage extends StatefulWidget {
   @override
@@ -43,7 +44,8 @@ class _SignInPageState extends State<SignInPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const HomeScreen(), // No need to pass uid
+            builder: (context) =>
+                const DashboardScreen(), // No need to pass uid
           ),
         );
       }
@@ -59,9 +61,9 @@ class _SignInPageState extends State<SignInPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          Color(0xFF2C3C3C), // Matches the dark greenish background
+          const Color(0xFF2C3C3C), // Matches the dark greenish background
       appBar: AppBar(
-        backgroundColor: Color(0xFF2C3C3C), // Matches background color
+        backgroundColor: const Color(0xFF2C3C3C), // Matches background color
         elevation: 0, // Remove shadow under AppBar
         leading: IconButton(
           icon: const Icon(Icons.arrow_back,
@@ -70,9 +72,7 @@ class _SignInPageState extends State<SignInPage> {
             // Navigate back to the onboarding page
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(
-                  builder: (context) =>
-                      OnboardingPage()), // Replace with your actual onboarding page widget
+              MaterialPageRoute(builder: (context) => OnboardingPage()),
               (route) => false, // Remove all previous routes
             );
           },
@@ -186,7 +186,35 @@ class _SignInPageState extends State<SignInPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 50),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 38.0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => ForgotPassword()),
+                                );
+                              },
+                              child: const Text(
+                                "Forgot Password?",
+                                style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 15,
+                                    fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
 
                     // Sign in button
                     SizedBox(
@@ -210,6 +238,7 @@ class _SignInPageState extends State<SignInPage> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 30),
 
                     // Go to Sign up Page

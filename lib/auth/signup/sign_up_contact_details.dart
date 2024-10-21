@@ -234,7 +234,9 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [LengthLimitingTextInputFormatter(30)],
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(200)
+                        ],
                         controller: _emailController,
                         decoration: const InputDecoration(
                           labelText: "Email",

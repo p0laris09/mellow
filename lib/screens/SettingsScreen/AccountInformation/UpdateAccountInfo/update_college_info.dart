@@ -1,47 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-import 'package:mellow/screens/ProfileScreen/UpdateProfileInfo/update_college_info.dart';
+import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateAccountInfo/review_update_details.dart';
 
-class UpdatePersonalInfo extends StatefulWidget {
+class UpdateCollegeInfo extends StatefulWidget {
+  final String firstName;
+  final String middleName;
+  final String lastName;
+  final String birthday;
+  final String phoneNumber;
+
+  UpdateCollegeInfo({
+    required this.firstName,
+    required this.middleName,
+    required this.lastName,
+    required this.birthday,
+    required this.phoneNumber,
+  });
+
   @override
-  _UpdatePersonalInfoState createState() => _UpdatePersonalInfoState();
+  _UpdateCollegeInfoState createState() => _UpdateCollegeInfoState();
 }
 
-class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
-  final TextEditingController _firstNameController = TextEditingController();
-  final TextEditingController _middleNameController = TextEditingController();
-  final TextEditingController _lastNameController = TextEditingController();
-  final TextEditingController _birthdayController = TextEditingController();
-  final TextEditingController _phoneController =
-      TextEditingController(text: '+63 9');
+class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
+  final TextEditingController _universityController =
+      TextEditingController(text: "University of Makati");
+  final TextEditingController _collegeController = TextEditingController();
+  final TextEditingController _programController = TextEditingController();
 
-  // Phone number validation starts with +63 9 and follows by 9 digits
-  bool isValidPhilippinePhoneNumber(String phoneNumber) {
-    return RegExp(r'^\+63 9\d{9}$').hasMatch(phoneNumber);
-  }
+  // For dropdown
+  String? _selectedYear;
+  final List<String> _years = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    '5th Year'
+  ]; // List of years
 
   String? _errorMessage;
-  DateTime? _selectedDate;
-
-  Future<void> _selectDate(BuildContext context) async {
-    DateTime currentDate = DateTime.now();
-    DateTime initialDate = _selectedDate ?? currentDate;
-
-    final DateTime? pickedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: currentDate,
-    );
-
-    if (pickedDate != null && pickedDate != initialDate) {
-      setState(() {
-        _selectedDate = pickedDate;
-        _birthdayController.text = DateFormat('MM/dd/yyyy').format(pickedDate);
-      });
-    }
-  }
 
   void _validateAndNavigate() {
     setState(() {
@@ -49,26 +45,29 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
     });
 
     // Check if fields are empty
-    if (_phoneController.text.isEmpty ||
-        _firstNameController.text.isEmpty ||
-        _lastNameController.text.isEmpty ||
-        _birthdayController.text.isEmpty) {
+    if (_collegeController.text.isEmpty ||
+        _programController.text.isEmpty ||
+        _selectedYear == null) {
       setState(() {
-        _errorMessage = 'Please fill in all fields!';
+        _errorMessage = 'Please fill in all required fields!';
       });
       return;
     }
 
-    // Navigate to the next page if validation passes
+    // Navigate to the AccountUpdateScreen
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => UpdateCollegeInfo(
-          firstName: _firstNameController.text,
-          middleName: _middleNameController.text,
-          lastName: _lastNameController.text,
-          birthday: _birthdayController.text,
-          phoneNumber: _phoneController.text,
+        builder: (context) => AccountUpdateScreen(
+          firstName: widget.firstName,
+          middleName: widget.middleName,
+          lastName: widget.lastName,
+          birthday: widget.birthday,
+          phoneNumber: widget.phoneNumber,
+          university: _universityController.text,
+          college: _collegeController.text,
+          program: _programController.text,
+          year: _selectedYear!,
         ),
       ),
     );
@@ -102,7 +101,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "Update your account by\ninputting your personal details.",
+                    "Input the necessary details\nabout your university.",
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w300,
@@ -114,7 +113,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
             ),
             const SizedBox(height: 30),
             SizedBox(
-              height: 597,
+              height: 590,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -143,17 +142,14 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                             )
                           : null,
                     ),
+                    // University
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(
-                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
-                          LengthLimitingTextInputFormatter(100),
-                        ],
-                        controller: _firstNameController,
+                        controller: _universityController,
+                        readOnly: true,
                         decoration: const InputDecoration(
-                          labelText: "First Name",
+                          labelText: "University",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -163,17 +159,19 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       ),
                     ),
                     const SizedBox(height: 9),
+
+                    // College TextField
                     SizedBox(
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(
-                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
-                          LengthLimitingTextInputFormatter(100),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
+                          LengthLimitingTextInputFormatter(200),
                         ],
-                        controller: _middleNameController,
+                        controller: _collegeController,
                         decoration: const InputDecoration(
-                          labelText: "Middle Name",
+                          labelText: "College",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -183,17 +181,19 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       ),
                     ),
                     const SizedBox(height: 9),
+
+                    // Program
                     SizedBox(
                       width: 300,
                       child: TextField(
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(
-                              r'[a-zA-Z\s]')), // Allow alphabetic characters and spaces
-                          LengthLimitingTextInputFormatter(100),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z\s]')),
+                          LengthLimitingTextInputFormatter(200),
                         ],
-                        controller: _lastNameController,
+                        controller: _programController,
                         decoration: const InputDecoration(
-                          labelText: "Last Name",
+                          labelText: "Program",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -203,60 +203,43 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       ),
                     ),
                     const SizedBox(height: 9),
+
+                    // Dropdown for Year
                     SizedBox(
                       width: 300,
-                      child: TextField(
-                        controller: _birthdayController,
-                        keyboardType: TextInputType.datetime,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d/]')),
-                          LengthLimitingTextInputFormatter(10),
-                          // Allow MM/dd/yyyy format only
-                          TextInputFormatter.withFunction((oldValue, newValue) {
-                            final text = newValue.text;
-                            if (text.length == 2 || text.length == 5) {
-                              return TextEditingValue(
-                                text: '$text/',
-                                selection: TextSelection.collapsed(
-                                    offset: text.length + 1),
-                              );
-                            }
-                            return newValue;
-                          }),
-                        ],
-                        decoration: InputDecoration(
-                          labelText: "Birthday",
-                          labelStyle: const TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          border: const UnderlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.calendar_today),
-                            onPressed: () => _selectDate(context),
-                          ),
-                          hintText: 'MM/dd/yyyy',
-                        ),
-                      ),
-                    ),
-                    // Phone Number
-                    SizedBox(
-                      width: 300,
-                      child: TextField(
-                        inputFormatters: [LengthLimitingTextInputFormatter(14)],
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedYear,
                         decoration: const InputDecoration(
-                          labelText: "Phone Number",
+                          labelText: "Year",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
                           ),
                           border: UnderlineInputBorder(),
                         ),
+                        items: _years.map((String year) {
+                          return DropdownMenuItem<String>(
+                            value: year,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                year,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedYear = newValue;
+                          });
+                        },
+                        menuMaxHeight: 300, // Adjust the height as needed
                       ),
                     ),
                     const SizedBox(height: 50),
+
+                    // Next Page button
                     SizedBox(
                       width: 315,
                       height: 50,

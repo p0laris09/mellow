@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import 'package:mellow/screens/SettingsScreen/settings_screen.dart';
 
 class MyDrawer extends StatelessWidget {
   const MyDrawer({super.key});
@@ -16,7 +17,7 @@ class MyDrawer extends StatelessWidget {
     }
   }
 
-  // Method to get the user's full name
+  // Method to get the user's full name in uppercase
   Future<String> _getUserFullName(String uid) async {
     final doc =
         await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -24,9 +25,26 @@ class MyDrawer extends StatelessWidget {
       final data = doc.data();
       String firstName = data?['firstName'] ?? '';
       String lastName = data?['lastName'] ?? '';
-      return '$firstName $lastName'; // Combine first and last name
+      return '${firstName.toUpperCase()} ${lastName.toUpperCase()}'; // Combine and convert to uppercase
     }
-    return 'User'; // Return a default value if the user is not found
+    return 'USER'; // Return default uppercase value if the user is not found
+  }
+
+  // Method to get the user's profile image URL
+  Future<String?> _getProfileImageUrl(User? user) async {
+    if (user != null && user.photoURL != null) {
+      return user.photoURL; // Return the user's photo URL from Firebase Auth
+    }
+    // You can also fetch the profile picture from Firestore if stored there
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user?.uid)
+        .get();
+    if (doc.exists) {
+      return doc
+          .data()?['profileImageUrl']; // Get image from Firestore if stored
+    }
+    return null; // Return null if no image found
   }
 
   @override
@@ -37,7 +55,7 @@ class MyDrawer extends StatelessWidget {
       child: FutureBuilder<String>(
         future: user != null
             ? _getUserFullName(user.uid)
-            : Future.value('User'), // Get full name if user is logged in
+            : Future.value('USER'), // Get full name if user is logged in
         builder: (context, snapshot) {
           return ListView(
             padding: EdgeInsets.zero,
@@ -49,28 +67,46 @@ class MyDrawer extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.white,
-                      radius: 40,
-                      child: IconButton(
-                        onPressed: () {
-                          // Navigate to the profile page
-                          Navigator.pushNamed(context, '/profile');
-                        },
-                        icon: Icon(
-                          Icons.person,
-                          color: Colors.blueGrey[900],
-                        ),
-                      ),
+                    FutureBuilder<String?>(
+                      future:
+                          _getProfileImageUrl(user), // Get profile image URL
+                      builder: (context, profileSnapshot) {
+                        if (profileSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const CircularProgressIndicator(); // Show loader while fetching
+                        }
+
+                        return CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.white,
+                          backgroundImage: profileSnapshot.hasData
+                              ? NetworkImage(profileSnapshot
+                                  .data!) // Show image if URL exists
+                              : null, // Show no image if no URL
+                          child: profileSnapshot.hasData
+                              ? null
+                              : IconButton(
+                                  // Fallback to an icon if no image
+                                  onPressed: () {
+                                    // Navigate to the profile page
+                                    Navigator.pushNamed(context, '/profile');
+                                  },
+                                  icon: Icon(
+                                    Icons.person,
+                                    color: Colors.blueGrey[900],
+                                  ),
+                                ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     // Display user's full name
                     Text(
                       snapshot.connectionState == ConnectionState.waiting
-                          ? 'Loading...'
+                          ? 'LOADING...'
                           : snapshot.hasData
                               ? snapshot.data!
-                              : 'User', // Default value if name is not found
+                              : 'USER', // Default value if name is not found
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -93,7 +129,13 @@ class MyDrawer extends StatelessWidget {
               ListTile(
                 title: const Text('Settings'),
                 onTap: () {
-                  // Handle Press for settings
+                  // Navigate to the Settings page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsPage(),
+                    ),
+                  );
                 },
               ),
               const Divider(), // Divider before logout button

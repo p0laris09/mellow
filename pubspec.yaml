@@ -16,6 +16,8 @@ dependencies:
   workmanager: ^0.5.2
   image_picker: ^1.1.2
   firebase_storage: ^12.3.3
+  font_awesome_flutter: ^10.7.0
+  provider: ^6.1.2
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +26,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/img/logo.png
