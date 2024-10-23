@@ -3,7 +3,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:mellow/screens/TaskManagement/task_management.dart';
+import 'package:mellow/models/task_model.dart'; // Import your Task model
+
+class IJFA {
+  static double evaluate(Task task) {
+    // Example logic for evaluation
+    return (task.priority + task.urgency + task.importance) / task.complexity;
+  }
+}
 
 class TaskCreationScreen extends StatefulWidget {
   const TaskCreationScreen({super.key});
@@ -28,7 +35,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   @override
   void initState() {
     super.initState();
-
     _descriptionController.addListener(() {
       setState(() {
         _descriptionCharCount = _descriptionController.text.length;
@@ -67,6 +73,116 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     }
   }
 
+  Future<bool> _checkForConflicts(DateTime startTime, DateTime endTime) async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .where('userId', isEqualTo: userId)
+        .where('startTime', isLessThan: endTime)
+        .where('endTime', isGreaterThan: startTime)
+        .get();
+
+    return querySnapshot.docs.isNotEmpty;
+  }
+
+  void _showConflictDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Conflict Detected"),
+          content: const Text(
+              "This task conflicts with another task. Would you like to see suggested times?"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                _suggestAlternativeTimes();
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: const Text("Show Suggestions"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _suggestAlternativeTimes() async {
+    // Fetch existing tasks to implement your scheduling algorithm
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    // Get existing tasks' start and end times
+    List<DateTime> existingStartTimes = [];
+    List<DateTime> existingEndTimes = [];
+    for (var doc in querySnapshot.docs) {
+      existingStartTimes.add((doc['startTime'] as Timestamp).toDate());
+      existingEndTimes.add((doc['endTime'] as Timestamp).toDate());
+    }
+
+    // Define time range for suggestions (e.g., 1 hour later to 3 hours later)
+    DateTime now = DateTime.now();
+    DateTime earliestSuggestion = now.add(Duration(hours: 1));
+    DateTime latestSuggestion = now.add(Duration(hours: 3));
+
+    // Find available time slots
+    List<DateTime> suggestedTimes = [];
+    for (DateTime time = earliestSuggestion;
+        time.isBefore(latestSuggestion);
+        time = time.add(Duration(minutes: 30))) {
+      bool isConflicted = false;
+      for (int i = 0; i < existingStartTimes.length; i++) {
+        if ((time.isAfter(existingStartTimes[i]) &&
+                time.isBefore(existingEndTimes[i])) ||
+            (time.isBefore(existingStartTimes[i]) &&
+                time
+                    .add(Duration(minutes: 30))
+                    .isAfter(existingStartTimes[i]))) {
+          isConflicted = true;
+          break;
+        }
+      }
+      if (!isConflicted) {
+        suggestedTimes.add(time);
+      }
+    }
+
+    // Show suggestions to the user
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Suggested Times"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: suggestedTimes.isNotEmpty
+                ? suggestedTimes.map((time) {
+                    return Text(DateFormat('yyyy-MM-dd HH:mm').format(time));
+                  }).toList()
+                : [const Text("No available times found.")],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: const Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _createTaskInFirestore() async {
     String taskName = _taskNameController.text;
     String dueDateString = _dueDateController.text;
@@ -86,23 +202,68 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
         : null;
 
-    if (taskName.isNotEmpty &&
-        dueDate != null &&
-        startTime != null &&
-        endTime != null &&
-        userId != null) {
-      // Get current time
-      DateTime currentTime = DateTime.now();
+    // Check for empty fields
+    if (taskName.isEmpty) {
+      _showErrorSnackBar("Task name is required.");
+      return;
+    }
+    if (dueDate == null) {
+      _showErrorSnackBar("Due date is required.");
+      return;
+    }
+    if (startTime == null) {
+      _showErrorSnackBar("Start time is required.");
+      return;
+    }
+    if (endTime == null) {
+      _showErrorSnackBar("End time is required.");
+      return;
+    }
+    if (userId == null) {
+      _showErrorSnackBar("User ID not found.");
+      return;
+    }
 
-      // Determine initial status
+    // Check for conflicts before creating the task
+    bool hasConflict = await _checkForConflicts(startTime, endTime);
+    if (hasConflict) {
+      _showConflictDialog(); // Show conflict dialog
+    } else {
+      // Create an instance of Task
+      Task newTask = Task(
+        taskName: taskName,
+        dueDate: dueDate,
+        startTime: startTime,
+        endTime: endTime,
+        description: description,
+        priority: _priority,
+        urgency: _urgency,
+        importance: _importance,
+        complexity: _complexity,
+      );
+
+      // Evaluate the task using IJFA
+      double fitnessScore = IJFA.evaluate(newTask);
+      print(
+          'Evaluating task: ${newTask.taskName} with IJFA. Fitness Score: $fitnessScore');
+
+      // Example: Adjust task attributes based on fitness score (modify logic as needed)
+      if (fitnessScore < 1) {
+        newTask.priority = 1; // Example adjustment
+      } else if (fitnessScore > 4) {
+        newTask.priority = 5; // Example adjustment
+      }
+
+      // Get current time and determine initial status
+      DateTime currentTime = DateTime.now();
       String status;
       if (currentTime.isBefore(startTime)) {
-        status = 'pending'; // Task hasn't started yet
+        status = 'pending';
       } else if (currentTime.isAfter(startTime) &&
           currentTime.isBefore(dueDate)) {
-        status = 'ongoing'; // Task is ongoing
+        status = 'ongoing';
       } else {
-        status = 'overdue'; // Task is overdue
+        status = 'overdue';
       }
 
       CollectionReference tasks =
@@ -115,32 +276,35 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           'startTime': Timestamp.fromDate(startTime),
           'endTime': Timestamp.fromDate(endTime),
           'description': description,
-          'priority': _priority,
+          'priority': newTask.priority,
           'urgency': _urgency,
           'importance': _importance,
           'complexity': _complexity,
           'createdAt': Timestamp.now(),
           'userId': userId,
-          'status': status, // Set initial status
+          'status': status,
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Task created successfully!')),
         );
 
-        // Navigate back to TaskManagementScreen after task creation
-        Navigator.pop(context);
+        print('Task created successfully, popping context...');
+        Navigator.pop(context); // Ensure this is reached
       } catch (e) {
-        print("Error creating task: $e");
+        print('Error creating task: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create task.')),
+          const SnackBar(content: Text('Error creating task')),
         );
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields.')),
-      );
     }
+  }
+
+// Helper method to show error messages
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
