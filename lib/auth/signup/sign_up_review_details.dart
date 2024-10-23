@@ -15,7 +15,8 @@ class AccountReviewScreen extends StatefulWidget {
   final String email;
   final String password;
 
-  AccountReviewScreen({
+  const AccountReviewScreen({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,
@@ -39,20 +40,19 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
 
   // Method to handle saving data to Firestore
   Future<void> _signUpUser() async {
-    final FirebaseAuth _auth = FirebaseAuth.instance;
-    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+    final FirebaseAuth auth = FirebaseAuth.instance;
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
       // Create a new user with email and password
-      UserCredential userCredential =
-          await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential = await auth.createUserWithEmailAndPassword(
         email: widget.email,
         password: widget.password,
       );
 
       // Save additional details to Firestore
       if (userCredential.user != null) {
-        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        await firestore.collection('users').doc(userCredential.user!.uid).set({
           'firstName': widget.firstName,
           'middleName': widget.middleName,
           'lastName': widget.lastName,

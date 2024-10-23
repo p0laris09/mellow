@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import 'package:mellow/screens/ProfileScreen/UpdateProfileInfo/update_personal_info.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:mellow/provider/BannerImageProvider/banner_image_provider.dart';
+import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -14,249 +14,212 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  String? _profileImageUrl;
-  final ImagePicker _picker = ImagePicker();
-  Future<Map<String, dynamic>>? _userProfileFuture; // Updated: No late keyword
+  String userName = 'Loading...';
+  String profileImageUrl = '';
+  String bannerImageUrl = '';
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _userProfileFuture = _fetchUserProfile(); // Initialize the future
+    _loadUserProfile();
   }
 
-  // Method to fetch user data from Firestore
-  Future<Map<String, dynamic>> _fetchUserProfile() async {
+  Future<void> _loadUserProfile() async {
+    final profileImageProvider =
+        Provider.of<ProfileImageProvider>(context, listen: false);
+    final bannerImageProvider =
+        Provider.of<BannerImageProvider>(context, listen: false);
     User? user = FirebaseAuth.instance.currentUser;
+
     if (user != null) {
       try {
-        DocumentSnapshot userProfile = await FirebaseFirestore.instance
+        String userId = user.uid;
+
+        // Fetch user data from Firestore
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(userId)
             .get();
 
-        if (userProfile.exists) {
-          var data = userProfile.data() as Map<String, dynamic>;
+        if (userDoc.exists) {
           setState(() {
-            _profileImageUrl =
-                data['profileImageUrl']; // Get the profile image URL
+            userName =
+                '${userDoc['firstName']} ${userDoc['lastName']}'.toUpperCase();
+            isLoading = false; // Set loading to false after fetching user data
           });
-          return data; // Return user data
-        } else {
-          throw Exception('User profile does not exist');
+
+          // Fetch images from providers
+          await profileImageProvider.fetchProfileImage(user);
+          await bannerImageProvider.fetchBannerImage(user);
+
+          // Update the image URLs from providers
+          setState(() {
+            profileImageUrl = profileImageProvider.profileImageUrl ?? '';
+            bannerImageUrl = bannerImageProvider.bannerImageUrl ?? '';
+          });
         }
       } catch (e) {
-        throw Exception('Error fetching user profile: $e');
+        print('Error loading user profile: $e');
+        setState(() {
+          isLoading = false; // Set loading to false even if there's an error
+        });
       }
-    } else {
-      throw Exception('No user is currently logged in');
-    }
-  }
-
-  // Method to pick an image and upload to Firebase Storage
-  Future<void> _pickAndUploadImage() async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-      if (pickedFile == null) return;
-
-      File file = File(pickedFile.path);
-
-      // Upload to Firebase Storage
-      String filePath = 'profile_images/${user.uid}.png';
-      await FirebaseStorage.instance.ref(filePath).putFile(file);
-
-      // Get the download URL
-      String downloadUrl =
-          await FirebaseStorage.instance.ref(filePath).getDownloadURL();
-
-      // Update Firestore with the image URL
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'profileImageUrl': downloadUrl,
-      });
-
-      // Update the profile image URL in the state
-      setState(() {
-        _profileImageUrl = downloadUrl;
-      });
-    } catch (e) {
-      print('Error uploading image: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Account Information',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF2C3C3C),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _userProfileFuture, // Use the future initialized in initState
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (snapshot.hasData) {
-            var data = snapshot.data!;
-            String fullName =
-                '${data['firstName'] ?? ''} ${data['middleName'] ?? ''} ${data['lastName'] ?? ''}'
-                    .toUpperCase();
-            String birthday = data['birthday'] ?? 'Not provided';
-            String university = data['university'] ?? 'Not provided';
-            String college = data['college'] ?? 'Not provided';
-            String program = data['program'] ?? 'Not provided';
-            String year = data['year'] ?? 'Not provided';
-            String phoneNumber = data['phoneNumber'] ?? 'Not provided';
-            String email = data['email'] ??
-                FirebaseAuth.instance.currentUser?.email ??
-                'Not provided';
-
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _pickAndUploadImage,
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: _profileImageUrl != null
-                            ? NetworkImage(_profileImageUrl!)
-                            : null,
-                        child: _profileImageUrl == null
-                            ? const Icon(
-                                Icons.person,
-                                size: 50,
-                                color: Colors.teal,
-                              )
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      fullName,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    _buildProfileDetail('Birthday', birthday),
-                    _buildProfileDetail('University', university),
-                    _buildProfileDetail('College', college),
-                    _buildProfileDetail('Program', program),
-                    _buildProfileDetail('Year', year),
-                    _buildProfileDetail('Phone Number', phoneNumber),
-                    _buildProfileDetail('Email', email),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: SizedBox(
-                        width: 315,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => UpdatePersonalInfo()),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2C3C3C),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  Stack(
+                    children: [
+                      // Using Consumer to listen to changes in BannerImageProvider
+                      Consumer<BannerImageProvider>(
+                        builder: (context, bannerImageProvider, child) {
+                          return Container(
+                            height: 220,
+                            decoration: BoxDecoration(
+                              image: bannerImageProvider
+                                      .bannerImageUrl.isNotEmpty
+                                  ? DecorationImage(
+                                      image: NetworkImage(
+                                          bannerImageProvider.bannerImageUrl),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                             ),
-                          ),
-                          child: const Text(
-                            'UPDATE ACCOUNT INFO',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          print('Delete Account Pressed');
+                            child: bannerImageProvider.bannerImageUrl.isEmpty
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : null,
+                          );
                         },
-                        child: const Text(
-                          'DELETE ACCOUNT',
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold),
+                      ),
+                      // Profile avatar
+                      Positioned(
+                        top: 80,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 130,
+                              height: 130,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.black,
+                                  width: 4.0,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 60,
+                                backgroundImage: profileImageUrl.isNotEmpty
+                                    ? NetworkImage(
+                                        profileImageUrl) // User's profile image
+                                    : null,
+                                child: profileImageUrl.isEmpty
+                                    ? const Icon(Icons.person,
+                                        size: 60) // Placeholder icon
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          } else {
-            return const Center(child: Text('No data found'));
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildProfileDetail(String label, String value, {Widget? trailing}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.only(left: 12.0),
-                  child: Text(
-                    value,
+                  const SizedBox(height: 16),
+                  // Profile Details
+                  Text(
+                    userName,
                     style: const TextStyle(
-                      fontSize: 19,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'IV-BCSAD', // Placeholder profession
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  // Social media and follow stats
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem('30', 'Followers'),
+                        _buildStatItem('61', 'Following'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Social media icons
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FaIcon(FontAwesomeIcons.facebook,
+                          size: 35, color: Colors.blue),
+                      SizedBox(width: 20),
+                      FaIcon(FontAwesomeIcons.twitter,
+                          size: 35, color: Colors.blue),
+                      SizedBox(width: 20),
+                      FaIcon(FontAwesomeIcons.instagram,
+                          size: 35, color: Colors.pink),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  // Skills and Details about the user/student
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Daily UI #5 - User Profile',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('$userName · yesterday'),
+                        const SizedBox(height: 15),
+                        // Additional details can go here
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (trailing != null) trailing,
-        ],
-      ),
+    );
+  }
+
+  Widget _buildStatItem(String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.grey),
+        ),
+      ],
     );
   }
 }

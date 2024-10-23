@@ -4,8 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 
 class TaskManagementScreen extends StatefulWidget {
+  const TaskManagementScreen({super.key});
+
   @override
   _TaskManagementScreenState createState() => _TaskManagementScreenState();
 }
@@ -250,7 +253,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TaskCreationScreen(),
+                    builder: (context) => const TaskCreationScreen(),
                   ),
                 );
               },
@@ -306,6 +309,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            _buildOverdueSection(),
+            const SizedBox(height: 8),
             _buildTaskSection(), // This will now use StreamBuilder for real-time updates
           ],
         ),
@@ -313,10 +318,99 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     );
   }
 
+  Widget _buildOverdueSection() {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    DateTime now = DateTime.now(); // Current date and time
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('tasks')
+            .where('userId', isEqualTo: uid)
+            .where('endTime',
+                isLessThan: Timestamp.fromDate(now)) // Overdue tasks
+            .where('status', isNotEqualTo: 'Finished') // Exclude finished tasks
+            .orderBy('endTime', descending: false)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text("Error loading overdue tasks: ${snapshot.error}");
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            // Return an empty container if there are no overdue tasks
+            return const SizedBox.shrink();
+          }
+
+          var overdueTaskDocs = snapshot.data!.docs;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  "Overdue",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: overdueTaskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = overdueTaskDocs[index];
+                  String taskId = task.id; // Get Firestore's document ID
+                  DateTime startTime =
+                      (task['startTime'] as Timestamp).toDate();
+                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+                  String name = task['taskName'] ?? 'Unnamed Task';
+
+                  String formattedStartTime =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+
+                  // Determine task status based on the end time
+                  String taskStatus;
+                  if (task['status'] == 'Finished') {
+                    taskStatus =
+                        'Finished'; // Set status to Finished if it is finished
+                  } else if (dueDate.isBefore(now)) {
+                    taskStatus = 'Overdue'; // Task is overdue
+                  } else {
+                    taskStatus = 'Ongoing'; // Task is still ongoing
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: TaskCard(
+                      taskId: taskId,
+                      taskName: name,
+                      dueDate: formattedDueDate,
+                      startTime: formattedStartTime,
+                      startDateTime: startTime,
+                      dueDateTime: dueDate,
+                      taskStatus: taskStatus, // This is passed correctly
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildTaskSection() {
     String uid = FirebaseAuth.instance.currentUser!.uid;
 
-    // Set the start and end time for the selected day
     DateTime startOfDay =
         DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 0, 0);
     DateTime endOfDay = DateTime(
@@ -346,8 +440,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                     isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
                 .where('startTime',
                     isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-                .orderBy('startTime',
-                    descending: false) // Order by both date and time
+                .orderBy('startTime', descending: false)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
@@ -366,179 +459,39 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
               var taskDocs = snapshot.data!.docs;
 
-              // Fetch overdue tasks as well
-              List<Widget> overdueTasks = _fetchOverdueTasks(uid);
+              return ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: taskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = taskDocs[index];
+                  String taskId = task.id;
+                  DateTime startTime =
+                      (task['startTime'] as Timestamp).toDate();
+                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+                  String name = task['taskName'] ?? 'Unnamed Task';
+                  String taskStatus =
+                      task['status'] ?? 'Pending'; // Fetch task status
 
-              return Column(
-                children: [
-                  ListView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    shrinkWrap: true,
-                    itemCount: taskDocs.length,
-                    itemBuilder: (context, index) {
-                      DocumentSnapshot task = taskDocs[index];
-                      DateTime startTime =
-                          (task['startTime'] as Timestamp).toDate();
-                      DateTime dueDate =
-                          (task['endTime'] as Timestamp).toDate();
-                      String name = task['taskName'] ?? 'Unnamed Task';
+                  String formattedStartTime =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
 
-                      String formattedStartTime =
-                          DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
-                      String formattedDueDate =
-                          DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
-                        child: _buildProgressTask(name, formattedDueDate,
-                            formattedStartTime, startTime, dueDate),
-                      );
-                    },
-                  ),
-                  if (overdueTasks.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: overdueTasks,
-                      ),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: TaskCard(
+                      taskId: taskId,
+                      taskName: name,
+                      dueDate: formattedDueDate,
+                      startTime: formattedStartTime,
+                      startDateTime: startTime,
+                      dueDateTime: dueDate,
+                      taskStatus: taskStatus, // Pass the real task status
                     ),
-                ],
+                  );
+                },
               );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _fetchOverdueTasks(String uid) {
-    List<Widget> overdueTaskWidgets = [];
-
-    FirebaseFirestore.instance
-        .collection('tasks')
-        .where('userId', isEqualTo: uid)
-        .where('endTime', isLessThan: Timestamp.fromDate(DateTime.now()))
-        .where('status',
-            isNotEqualTo:
-                'Completed') // Only show overdue tasks that aren't completed
-        .orderBy('endTime', descending: true)
-        .get()
-        .then((querySnapshot) {
-      for (var task in querySnapshot.docs) {
-        DateTime startTime = (task['startTime'] as Timestamp).toDate();
-        DateTime dueDate = (task['endTime'] as Timestamp).toDate();
-        String name = task['taskName'] ?? 'Unnamed Task';
-        String formattedStartTime =
-            DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
-        String formattedDueDate =
-            DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
-
-        overdueTaskWidgets.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: _buildProgressTask(
-                name, formattedDueDate, formattedStartTime, startTime, dueDate),
-          ),
-        );
-      }
-    });
-
-    return overdueTaskWidgets;
-  }
-
-  Widget _buildProgressTask(String taskName, String dueDate, String startTime,
-      DateTime taskStartTime, DateTime taskDueDate) {
-    DateTime now = DateTime.now();
-    String taskStatus;
-    Color iconColor;
-
-    // Determine the status and icon color based on the time comparison
-    if (now.isAfter(taskDueDate)) {
-      taskStatus = "Overdue";
-      iconColor = Colors.red;
-    } else if (now.isAfter(taskStartTime) && now.isBefore(taskDueDate)) {
-      taskStatus = "Ongoing";
-      iconColor = Colors.green;
-    } else {
-      taskStatus = "Pending";
-      iconColor = Colors.grey;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(
-          vertical: 8), // Adding margin to increase space between task cards
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2), // Changes position of shadow
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Task icon with dynamic color based on task status
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: iconColor, // Use the dynamic icon color
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.task, color: Colors.white),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  taskName,
-                  style: TextStyle(
-                    fontSize: 18, // Increased font size for better visibility
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                Text(
-                  'Start: $startTime',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Due: $dueDate',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                // Displaying task status
-                Text(
-                  'Status: $taskStatus',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color:
-                        iconColor, // Matching the color of the status text with the icon
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.grey),
-            onPressed: () {
-              // Handle options button
             },
           ),
         ],

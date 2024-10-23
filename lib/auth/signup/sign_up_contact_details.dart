@@ -12,7 +12,8 @@ class SignUpContactDetails extends StatefulWidget {
   final String program;
   final String year;
 
-  SignUpContactDetails({
+  const SignUpContactDetails({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,
@@ -234,7 +235,9 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        inputFormatters: [LengthLimitingTextInputFormatter(30)],
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(200)
+                        ],
                         controller: _emailController,
                         decoration: const InputDecoration(
                           labelText: "Email",

@@ -64,7 +64,7 @@ class _SignInTestState extends State<SignInTest> {
                 children: [
                   const SizedBox(height: 40),
                   // Email TextField with fixed width
-                  SizedBox(
+                  const SizedBox(
                     width: 300, // Set your desired width here
                     child: TextField(
                       // controller: _emailController,

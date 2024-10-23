@@ -4,6 +4,8 @@ import 'package:mellow/auth/signin/sign_in.dart';
 import 'package:mellow/auth/signup/sign_up_college_details.dart';
 
 class SignUpTest extends StatefulWidget {
+  const SignUpTest({super.key});
+
   @override
   _SignUpTestState createState() => _SignUpTestState();
 }
@@ -92,7 +94,7 @@ class _SignUpTestState extends State<SignUpTest> {
                       width: 300,
                       child: TextField(
                         controller: _firstNameController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: "First Name",
                           labelStyle: TextStyle(
                             color: Colors.black,
@@ -107,7 +109,7 @@ class _SignUpTestState extends State<SignUpTest> {
                       width: 300,
                       child: TextField(
                         controller: _middleNameController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: "Middle Name",
                           labelStyle: TextStyle(
                             color: Colors.black,
@@ -122,7 +124,7 @@ class _SignUpTestState extends State<SignUpTest> {
                       width: 300,
                       child: TextField(
                         controller: _lastNameController,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: "Last Name",
                           labelStyle: TextStyle(
                             color: Colors.black,

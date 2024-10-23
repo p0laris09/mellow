@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class OnboardingPage extends StatelessWidget {
+  const OnboardingPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -14,14 +16,14 @@ class OnboardingPage extends StatelessWidget {
           ),
           // Bottom section with title, description, and buttons
           Container(
-            padding: EdgeInsets.all(20),
-            color: Color(
+            padding: const EdgeInsets.all(20),
+            color: const Color(
                 0xFF2C3C3C), // Dark background color for the bottom section
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 // Title Text
-                Text(
+                const Text(
                   "Mellow",
                   style: TextStyle(
                     fontSize: 36,
@@ -29,7 +31,7 @@ class OnboardingPage extends StatelessWidget {
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 // Subtitle Text
                 Text(
                   "The new Task Manager App that will help students handle their tasks and manage their time better.",
@@ -39,21 +41,22 @@ class OnboardingPage extends StatelessWidget {
                     color: Colors.grey[300],
                   ),
                 ),
-                SizedBox(height: 30),
+                const SizedBox(height: 30),
                 // SIGN IN Button
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/signin');
                   },
                   style: ElevatedButton.styleFrom(
-                    foregroundColor: Color(0xFF2C3C3C),
+                    foregroundColor: const Color(0xFF2C3C3C),
                     backgroundColor: Colors.grey[200], // Text color
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30), // Rounded edges
                     ),
-                    padding: EdgeInsets.symmetric(vertical: 15, horizontal: 80),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 15, horizontal: 80),
                   ),
-                  child: Text(
+                  child: const Text(
                     "SIGN IN",
                     style: TextStyle(
                       fontSize: 16,
@@ -61,20 +64,21 @@ class OnboardingPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 // SIGN UP Button
                 OutlinedButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/signup');
                   },
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.white),
+                    side: const BorderSide(color: Colors.white),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30), // Rounded edges
                     ),
-                    padding: EdgeInsets.symmetric(vertical: 15, horizontal: 80),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 15, horizontal: 80),
                   ),
-                  child: Text(
+                  child: const Text(
                     "SIGN UP",
                     style: TextStyle(
                       fontSize: 16,

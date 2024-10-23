@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:mellow/screens/HomeScreen/home_screen.dart';
+import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
 import 'package:mellow/auth/onboarding/onboarding.dart';
 
 class AuthPage extends StatelessWidget {
@@ -12,12 +12,18 @@ class AuthPage extends StatelessWidget {
       body: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
+          // If the snapshot has no data (still loading or error)
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+                child: CircularProgressIndicator()); // Show a loading indicator
+          }
+
           // If the user is logged in
           if (snapshot.hasData) {
-            return const HomeScreen();
+            return const DashboardScreen();
           } else {
             // If the user is not logged in
-            return OnboardingPage();
+            return const OnboardingPage();
           }
         },
       ),

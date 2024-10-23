@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:mellow/screens/TaskManagement/task_management.dart';
 
 class TaskCreationScreen extends StatefulWidget {
   const TaskCreationScreen({super.key});
@@ -151,7 +150,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         backgroundColor: const Color(0xFF2C3C3C),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+          ),
           onPressed: () {
             Navigator.pop(context);
           },
@@ -170,7 +172,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 35),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 35,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -178,7 +182,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     width: 300,
                     child: TextField(
                       controller: _taskNameController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(
+                        color: Colors.white,
+                      ),
                       decoration: const InputDecoration(
                         labelText: "Task Name",
                         labelStyle: TextStyle(
@@ -351,12 +357,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           label,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-        Row(
+        const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Low', style: TextStyle(fontSize: 12)),
-            const Text('Medium', style: TextStyle(fontSize: 12)),
-            const Text('High', style: TextStyle(fontSize: 12)),
+            Text('Low', style: TextStyle(fontSize: 12)),
+            Text('Medium', style: TextStyle(fontSize: 12)),
+            Text('High', style: TextStyle(fontSize: 12)),
           ],
         ),
         Slider(
