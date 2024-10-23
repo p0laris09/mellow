@@ -34,12 +34,12 @@ class _ForgotPasswordState extends State<ForgotPassword> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ForgotPasswordEmailSent(), // The new page
+          builder: (context) => const ForgotPasswordEmailSent(), // The new page
         ),
       );
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error: ' + e.toString();
+        _errorMessage = 'Error: $e';
       });
     }
   }

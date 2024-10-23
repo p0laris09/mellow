@@ -7,7 +7,7 @@ import 'package:mellow/provider/BannerImageProvider/banner_image_provider.dart';
 import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({Key? key}) : super(key: key);
+  const ProfilePage({super.key});
 
   @override
   _ProfilePageState createState() => _ProfilePageState();

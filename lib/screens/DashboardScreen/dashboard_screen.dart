@@ -10,6 +10,7 @@ import 'package:mellow/widgets/bottomnav/mybottomnavbar.dart';
 import 'package:mellow/widgets/cards/SpaceCards/recently_space_card.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 import 'package:provider/provider.dart'; // For Firebase Authentication
 
 class DashboardScreen extends StatefulWidget {
@@ -27,7 +28,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     TaskManagementScreen(),
     const SpaceScreen(),
     const AnalyticsScreen(),
-    ProfilePage(),
+    const ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
@@ -61,28 +62,25 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   String profileImageUrl = '';
   String userName = '';
   List<DocumentSnapshot> _tasks = [];
-
-  DateTime get _startOfWeek {
-    DateTime now = DateTime.now();
-    return now.subtract(Duration(days: now.weekday - 1)); // Start from Monday
-  }
+  List<DocumentSnapshot> _recentSpaces = [];
+  bool hasAnalytics = false;
 
   @override
   void initState() {
     super.initState();
     _fetchTasks();
     _loadUserProfile();
+    _fetchRecentSpaces();
+    _checkAnalyticsAvailability();
   }
 
   Future<void> _loadUserProfile() async {
-    // Access the ProfileImageProvider
     final profileImageProvider =
         Provider.of<ProfileImageProvider>(context, listen: false);
     User? user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
       try {
-        // Load user name
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -91,19 +89,15 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
           userName = userDoc.exists ? userDoc['firstName'] ?? 'User' : 'User';
         });
 
-        // Ensure the profile image URL is fetched from the provider
         await profileImageProvider.fetchProfileImage(user);
-
-        // Get the image URL from the provider
         setState(() {
           profileImageUrl = profileImageProvider.profileImageUrl ?? '';
         });
       } catch (e) {
         print('Error loading profile: $e');
-        // Load default profile if error occurs
         setState(() {
           userName = 'User';
-          profileImageUrl = ''; // Or set to default image URL if needed
+          profileImageUrl = '';
         });
       }
     }
@@ -111,22 +105,65 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
 
   Future<void> _fetchTasks() async {
     try {
-      String uid = FirebaseAuth.instance.currentUser!.uid;
-      DateTime startOfWeek = _startOfWeek;
-      DateTime endOfWeek = startOfWeek.add(Duration(days: 7));
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) {
+        print("User is not authenticated");
+        return;
+      }
 
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('tasks')
-          .where('userId', isEqualTo: uid)
-          .where('startTime', isGreaterThanOrEqualTo: startOfWeek)
-          .where('startTime', isLessThan: endOfWeek)
+          .where('userId', isEqualTo: currentUser.uid)
+          .where('status', isNotEqualTo: 'Finished')
+          .get();
+
+      List<DocumentSnapshot> tasks = querySnapshot.docs;
+
+      tasks.sort((a, b) {
+        DateTime dueDateA =
+            (a['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+        DateTime dueDateB =
+            (b['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return dueDateA.compareTo(dueDateB);
+      });
+
+      if (mounted) {
+        setState(() {
+          _tasks = tasks;
+        });
+      }
+    } catch (e) {
+      print("Error fetching tasks: $e");
+    }
+  }
+
+  Future<void> _fetchRecentSpaces() async {
+    try {
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('spaces')
+          .orderBy('createdAt', descending: true)
+          .limit(5)
           .get();
 
       setState(() {
-        _tasks = querySnapshot.docs;
+        _recentSpaces = querySnapshot.docs;
       });
     } catch (e) {
-      print("Error fetching tasks: $e");
+      print("Error fetching recent spaces: $e");
+    }
+  }
+
+  Future<void> _checkAnalyticsAvailability() async {
+    try {
+      QuerySnapshot querySnapshot =
+          await FirebaseFirestore.instance.collection('analytics').get();
+
+      setState(() {
+        hasAnalytics = querySnapshot.docs.isNotEmpty;
+      });
+    } catch (e) {
+      print("Error checking analytics availability: $e");
     }
   }
 
@@ -196,28 +233,36 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     );
   }
 
-  Widget _buildRecentSpaceCards() {
-    return const SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          RecentSpaceCard(
-            spaceName: "Design Discussion",
-            description: "Discussing UI/UX improvements for the app.",
-            date: "30 September 2024",
-          ),
-          SizedBox(width: 16),
-          RecentSpaceCard(
-            spaceName: "Backend API Development",
-            description: "Collaborating on the API integration.",
-            date: "20 October 2024",
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAnalyticsSection() {
+    if (!hasAnalytics) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Text(
+                "Task Analytics",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+            const Text(
+              "No analytics to show.",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
       child: Column(
@@ -234,12 +279,42 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
+          // Add analytics content here (if any)
         ],
       ),
     );
   }
 
   Widget _buildSpaceSection() {
+    if (_recentSpaces.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Text(
+                "Recent Spaces",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+            const Text(
+              "No spaces were opened recently.",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
       child: Column(
@@ -256,8 +331,28 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          _buildRecentSpaceCards(), // Display space tasks here
+          _buildRecentSpaceCards(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecentSpaceCards() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _recentSpaces.map((space) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: RecentSpaceCard(
+              spaceName: space['name'] ?? 'Unnamed Space',
+              description: space['description'] ?? 'No description',
+              date: DateFormat('dd MMMM yyyy').format(
+                (space['createdAt'] as Timestamp).toDate(),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -279,158 +374,75 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          // Corrected logic for task display to ensure all tasks are rendered
-          _tasks.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Text(
-                    'No tasks available for the current week.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                  ),
-                )
-              : ListView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  itemCount: _tasks.length,
-                  itemBuilder: (context, index) {
-                    DocumentSnapshot task = _tasks[index];
-                    DateTime startTime =
-                        (task['startTime'] as Timestamp?)?.toDate() ??
-                            DateTime.now();
-                    DateTime dueDate =
-                        (task['endTime'] as Timestamp?)?.toDate() ??
-                            DateTime.now();
-                    String name = task['taskName'] ?? 'Unnamed Task';
+          if (_tasks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                'No tasks available.',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            )
+          else
+            ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              itemCount: _tasks.length,
+              itemBuilder: (context, index) {
+                DocumentSnapshot task = _tasks[index];
 
-                    String formattedStartTime =
-                        DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
-                    String formattedDueDate =
-                        DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+                DateTime startTime =
+                    (task['startTime'] as Timestamp?)?.toDate() ??
+                        DateTime.now();
+                DateTime dueDate =
+                    (task['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+                String name = task['taskName'] ?? 'Unnamed Task';
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: _buildProgressTask(
-                          name,
-                          formattedDueDate,
-                          formattedStartTime,
-                          startTime, // Pass start time
-                          dueDate // Pass due date
-                          ),
-                    );
-                  },
-                ),
-        ],
-      ),
-    );
-  }
+                String taskId = task.id;
+                String taskStatus = task['status'] ?? 'Pending';
 
-  Widget _buildProgressTask(String taskName, String dueDate, String startTime,
-      DateTime taskStartTime, DateTime taskDueDate) {
-    DateTime now = DateTime.now();
-    String taskStatus;
-    Color iconColor;
+                String formattedStartTime =
+                    DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                String formattedDueDate =
+                    DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
 
-    // Determine the status and icon color based on the time comparison
-    if (now.isAfter(taskDueDate)) {
-      taskStatus = "Overdue";
-      iconColor = Colors.red;
-    } else if (now.isAfter(taskStartTime) && now.isBefore(taskDueDate)) {
-      taskStatus = "Ongoing";
-      iconColor = Colors.green;
-    } else {
-      taskStatus = "Pending";
-      iconColor = Colors.grey;
-    }
+                DateTime now = DateTime.now();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(
-          vertical: 8), // Adding margin to increase space between task cards
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            offset: const Offset(0, 4),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.task,
-            color: iconColor,
-            size: 28,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  taskName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Start: $startTime",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Due: $dueDate",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
+                bool isOverdue = now.isAfter(dueDate);
+                bool isOngoing =
+                    now.isAfter(startTime) && now.isBefore(dueDate);
+
+                if (taskStatus != 'Finished' &&
+                    (isOngoing || isOverdue || taskStatus == 'Pending')) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: TaskCard(
+                      taskId: taskId,
+                      taskName: name,
+                      startTime: formattedStartTime,
+                      dueDate: formattedDueDate,
+                      startDateTime: startTime,
+                      dueDateTime: dueDate,
+                      taskStatus: taskStatus,
+                    ),
+                  );
+                }
+                return const SizedBox.shrink(); // Skip tasks that are finished
+              },
             ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              taskStatus == "Overdue"
-                  ? Icons.warning
-                  : taskStatus == "Ongoing"
-                      ? Icons.hourglass_bottom
-                      : Icons.schedule,
-              color: iconColor,
-            ),
-          ),
         ],
       ),
     );
   }
 
   Future<String?> _getFirstName() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      final userDoc = await FirebaseFirestore.instance
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final DocumentSnapshot snapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user?.uid)
+          .doc(user.uid)
           .get();
-      if (userDoc.exists && userDoc.data() != null) {
-        return userDoc.data()!['firstName'] ?? user?.email;
-      }
-      return user?.email; // Fallback to email
-    } catch (e) {
-      print('Error fetching user name: $e');
-      return 'User';
+      return snapshot['firstName'];
     }
+    return null;
   }
 }

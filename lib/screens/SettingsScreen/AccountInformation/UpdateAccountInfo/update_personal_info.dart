@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateAccountInfo/update_college_info.dart';
 
 class UpdatePersonalInfo extends StatefulWidget {
+  const UpdatePersonalInfo({super.key});
+
   @override
   _UpdatePersonalInfoState createState() => _UpdatePersonalInfoState();
 }

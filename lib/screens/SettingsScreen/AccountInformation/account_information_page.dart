@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mellow/screens/ProfileScreen/UpdateEmail/email_update.dart';
+import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateEmail/email_update.dart';
 import 'dart:io';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateAccountInfo/update_personal_info.dart';
 

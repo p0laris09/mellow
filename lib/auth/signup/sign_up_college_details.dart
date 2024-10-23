@@ -8,7 +8,8 @@ class SignUpCollegeDetails extends StatefulWidget {
   final String lastName;
   final String birthday;
 
-  SignUpCollegeDetails({
+  const SignUpCollegeDetails({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,
@@ -218,7 +219,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                           return DropdownMenuItem<String>(
                             value: year,
                             child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: 250),
+                              constraints: const BoxConstraints(maxWidth: 250),
                               child: Text(
                                 year,
                                 overflow: TextOverflow.ellipsis,

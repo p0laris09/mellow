@@ -18,6 +18,8 @@ dependencies:
   firebase_storage: ^12.3.3
   font_awesome_flutter: ^10.7.0
   provider: ^6.1.2
+  flutter_native_splash: ^2.4.2
+    
 
 dev_dependencies:
   flutter_test:
@@ -28,3 +30,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/img/logo.png
+    - assets/img/splash_logo.png
+    - assets/img/app_icon.png

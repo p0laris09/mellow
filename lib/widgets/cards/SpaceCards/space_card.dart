@@ -9,8 +9,8 @@ class SpaceCard extends StatelessWidget {
     required this.spaceName,
     required this.description,
     required this.date,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +70,8 @@ class SpaceCard extends StatelessWidget {
   }
 
   Widget _buildAvatarsRow() {
-    return Row(
-      children: const [
+    return const Row(
+      children: [
         CircleAvatar(
           backgroundColor: Colors.grey,
           radius: 12,

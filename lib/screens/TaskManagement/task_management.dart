@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 
 class TaskManagementScreen extends StatefulWidget {
+  const TaskManagementScreen({super.key});
+
   @override
   _TaskManagementScreenState createState() => _TaskManagementScreenState();
 }
@@ -251,7 +253,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TaskCreationScreen(),
+                    builder: (context) => const TaskCreationScreen(),
                   ),
                 );
               },
@@ -317,23 +319,91 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Widget _buildOverdueSection() {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+    DateTime now = DateTime.now(); // Current date and time
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Text(
-              "Overdue",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('tasks')
+            .where('userId', isEqualTo: uid)
+            .where('endTime',
+                isLessThan: Timestamp.fromDate(now)) // Overdue tasks
+            .where('status', isNotEqualTo: 'Finished') // Exclude finished tasks
+            .orderBy('endTime', descending: false)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text("Error loading overdue tasks: ${snapshot.error}");
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            // Return an empty container if there are no overdue tasks
+            return const SizedBox.shrink();
+          }
+
+          var overdueTaskDocs = snapshot.data!.docs;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  "Overdue",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+              ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: overdueTaskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = overdueTaskDocs[index];
+                  String taskId = task.id; // Get Firestore's document ID
+                  DateTime startTime =
+                      (task['startTime'] as Timestamp).toDate();
+                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+                  String name = task['taskName'] ?? 'Unnamed Task';
+
+                  String formattedStartTime =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+
+                  // Determine task status based on the end time
+                  String taskStatus;
+                  if (task['status'] == 'Finished') {
+                    taskStatus =
+                        'Finished'; // Set status to Finished if it is finished
+                  } else if (dueDate.isBefore(now)) {
+                    taskStatus = 'Overdue'; // Task is overdue
+                  } else {
+                    taskStatus = 'Ongoing'; // Task is still ongoing
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: TaskCard(
+                      taskId: taskId,
+                      taskName: name,
+                      dueDate: formattedDueDate,
+                      startTime: formattedStartTime,
+                      startDateTime: startTime,
+                      dueDateTime: dueDate,
+                      taskStatus: taskStatus, // This is passed correctly
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -395,10 +465,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 itemCount: taskDocs.length,
                 itemBuilder: (context, index) {
                   DocumentSnapshot task = taskDocs[index];
+                  String taskId = task.id;
                   DateTime startTime =
                       (task['startTime'] as Timestamp).toDate();
                   DateTime dueDate = (task['endTime'] as Timestamp).toDate();
                   String name = task['taskName'] ?? 'Unnamed Task';
+                  String taskStatus =
+                      task['status'] ?? 'Pending'; // Fetch task status
 
                   String formattedStartTime =
                       DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
@@ -408,11 +481,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: TaskCard(
+                      taskId: taskId,
                       taskName: name,
                       dueDate: formattedDueDate,
                       startTime: formattedStartTime,
                       startDateTime: startTime,
                       dueDateTime: dueDate,
+                      taskStatus: taskStatus, // Pass the real task status
                     ),
                   );
                 },

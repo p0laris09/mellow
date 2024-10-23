@@ -6,6 +6,8 @@ import 'package:mellow/auth/signin/sign_in.dart';
 import 'package:mellow/auth/signup/sign_up_college_details.dart';
 
 class SignUpPersonalDetails extends StatefulWidget {
+  const SignUpPersonalDetails({super.key});
+
   @override
   _SignUpPersonalDetailsState createState() => _SignUpPersonalDetailsState();
 }

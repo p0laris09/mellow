@@ -62,7 +62,9 @@ class SpaceScreen extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight, // Align button to the right
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () {
+                  _showSpaceCreationDialog(context); // Call the dialog function
+                },
                 icon: const Icon(Icons.add,
                     color: Colors.white), // Change icon color to white
                 label: const Text(
@@ -108,6 +110,55 @@ class SpaceScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  // Function to show the dialog box for creating a new space
+  void _showSpaceCreationDialog(BuildContext context) {
+    String spaceName = '';
+    String spaceDetails = '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Create New Space'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: 'Space Name'),
+                onChanged: (value) {
+                  spaceName = value;
+                },
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Space Details'),
+                onChanged: (value) {
+                  spaceDetails = value;
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Logic to handle space creation (e.g., save to database)
+                print('Space Name: $spaceName');
+                print('Space Details: $spaceDetails');
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

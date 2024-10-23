@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateEmail/email_update_sent.dart';
 
 class EmailUpdatePage extends StatefulWidget {
   const EmailUpdatePage({super.key});
@@ -9,13 +10,21 @@ class EmailUpdatePage extends StatefulWidget {
 }
 
 class _EmailUpdatePageState extends State<EmailUpdatePage> {
+  final TextEditingController _currentEmailController = TextEditingController();
   final TextEditingController _newEmailController = TextEditingController();
   final TextEditingController _confirmNewEmailController =
       TextEditingController();
   final TextEditingController _passwordController =
       TextEditingController(); // For re-authentication
-
+  bool _obscurePassword = true; // To toggle the visibility
   String? _errorMessage;
+
+  // Function to set the error message
+  void _setErrorMessage(String message) {
+    setState(() {
+      _errorMessage = message;
+    });
+  }
 
   // Function to re-authenticate the user
   Future<void> _reauthenticateUser(String password) async {
@@ -30,10 +39,8 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
       try {
         await user.reauthenticateWithCredential(credential);
       } on FirebaseAuthException catch (e) {
-        setState(() {
-          _errorMessage = "Re-authentication failed: ${e.message}";
-        });
-        throw e; // Re-throw the error to prevent email update if re-authentication fails
+        _setErrorMessage("Re-authentication failed: ${e.message}");
+        rethrow; // Re-throw the error to prevent email update if re-authentication fails
       }
     }
   }
@@ -46,17 +53,20 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
 
     // Check if the emails match
     if (newEmail != confirmNewEmail) {
-      setState(() {
-        _errorMessage = "Emails do not match.";
-      });
+      _setErrorMessage("Emails do not match.");
       return;
     }
 
     // Validate the email format
     if (!_isValidEmail(newEmail)) {
-      setState(() {
-        _errorMessage = "Invalid email format.";
-      });
+      _setErrorMessage("Invalid email format.");
+      return;
+    }
+
+    // Validate current email
+    String currentEmail = _currentEmailController.text.trim();
+    if (currentEmail.isEmpty) {
+      _setErrorMessage("Current email cannot be empty.");
       return;
     }
 
@@ -67,46 +77,42 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
       // Get the current user
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Update the user's email in Firebase Auth
-        await user.updateEmail(newEmail);
-        await user.reload();
-        user = FirebaseAuth.instance.currentUser;
+        // Use verifyBeforeUpdateEmail to send verification
+        await user.verifyBeforeUpdateEmail(newEmail);
+        await user.reload(); // This updates the user data
 
-        setState(() {
-          _errorMessage = "Email updated successfully!";
-        });
+        _setErrorMessage(
+            "A verification link has been sent to your new email.");
 
-        // Navigate back to the profile page
-        Navigator.pop(
-            context); // This will close the EmailUpdatePage and go back to the previous page
+        // Logout the user
+        await FirebaseAuth.instance.signOut();
+
+        // Navigate to the EmailUpdateSent screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => EmailUpdateSent()),
+        );
       } else {
-        setState(() {
-          _errorMessage = "No user is logged in.";
-        });
+        _setErrorMessage("No user is logged in.");
       }
     } on FirebaseAuthException catch (e) {
-      // Handle different error codes
-      if (e.code == 'email-already-in-use') {
-        setState(() {
-          _errorMessage = "This email is already in use by another account.";
-        });
-      } else if (e.code == 'invalid-email') {
-        setState(() {
-          _errorMessage = "The email address is not valid.";
-        });
-      } else if (e.code == 'requires-recent-login') {
-        setState(() {
-          _errorMessage = "Please re-authenticate and try again.";
-        });
-      } else {
-        setState(() {
-          _errorMessage = "An unknown error occurred: ${e.message}";
-        });
+      // Handle error codes
+      switch (e.code) {
+        case 'email-already-in-use':
+          _setErrorMessage("This email is already in use by another account.");
+          break;
+        case 'invalid-email':
+          _setErrorMessage("The email address is not valid.");
+          break;
+        case 'requires-recent-login':
+          _setErrorMessage("Please re-authenticate and try again.");
+          break;
+        default:
+          _setErrorMessage("An unknown error occurred: ${e.message}");
+          break;
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = "Failed to update email: $e";
-      });
+      _setErrorMessage("Failed to update email: $e");
     }
   }
 
@@ -190,6 +196,25 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
                             )
                           : null,
                     ),
+                    // Current Email
+                    SizedBox(
+                      width: 300,
+                      child: TextField(
+                        controller: _currentEmailController,
+                        maxLength: 254, // Limiting the max characters to 254
+                        decoration: const InputDecoration(
+                          labelText: "Current Email",
+                          labelStyle: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          border: UnderlineInputBorder(),
+                          counterText: "", // Hide the character count
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+
                     // New Email
                     SizedBox(
                       width: 300,
@@ -233,14 +258,27 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
                       width: 300,
                       child: TextField(
                         controller: _passwordController,
-                        obscureText: true, // Hide password input
-                        decoration: const InputDecoration(
+                        obscureText: _obscurePassword, // Use the boolean here
+                        decoration: InputDecoration(
                           labelText: "Password",
-                          labelStyle: TextStyle(
+                          labelStyle: const TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
                           ),
-                          border: UnderlineInputBorder(),
+                          border: const UnderlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword =
+                                    !_obscurePassword; // Toggle the visibility
+                              });
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -260,7 +298,7 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
                           backgroundColor: const Color(0xFF2C3C3C),
                         ),
                         child: const Text(
-                          "Submit",
+                          "Update Email",
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.white,

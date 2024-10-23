@@ -13,7 +13,8 @@ class AccountUpdateScreen extends StatefulWidget {
   final String program;
   final String year;
 
-  AccountUpdateScreen({
+  const AccountUpdateScreen({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,
@@ -32,15 +33,15 @@ class AccountUpdateScreen extends StatefulWidget {
 class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
   // Method to handle updating user data in Firestore
   Future<void> _updateUserData() async {
-    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-    final FirebaseAuth _auth = FirebaseAuth.instance;
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    final FirebaseAuth auth = FirebaseAuth.instance;
 
-    User? user = _auth.currentUser;
+    User? user = auth.currentUser;
 
     if (user != null) {
       try {
         // Update user details in Firestore
-        await _firestore.collection('users').doc(user.uid).update({
+        await firestore.collection('users').doc(user.uid).update({
           'firstName': widget.firstName,
           'middleName': widget.middleName,
           'lastName': widget.lastName,

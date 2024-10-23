@@ -9,7 +9,8 @@ class UpdateCollegeInfo extends StatefulWidget {
   final String birthday;
   final String phoneNumber;
 
-  UpdateCollegeInfo({
+  const UpdateCollegeInfo({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,
@@ -221,7 +222,7 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
                           return DropdownMenuItem<String>(
                             value: year,
                             child: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: 250),
+                              constraints: const BoxConstraints(maxWidth: 250),
                               child: Text(
                                 year,
                                 overflow: TextOverflow.ellipsis,

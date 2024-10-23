@@ -12,7 +12,7 @@ import 'package:mellow/screens/NotificationScreen/notification_screen.dart';
 import 'package:mellow/screens/ProfileScreen/profile_page.dart';
 import 'package:mellow/screens/SettingsScreen/settings_screen.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
-import 'package:mellow/screens/TaskManagement/task_management.dart'; // Import the Task Management screen
+import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:provider/provider.dart';
 import 'package:workmanager/workmanager.dart';
 import 'firebase_options.dart';
@@ -28,7 +28,6 @@ void main() async {
 
   runApp(
     MultiProvider(
-      // Use MultiProvider to provide multiple providers
       providers: [
         ChangeNotifierProvider(create: (_) => ProfileImageProvider()),
         ChangeNotifierProvider(create: (_) => BannerImageProvider()),
@@ -38,11 +37,9 @@ void main() async {
   );
 }
 
-// Background callback to check tasks
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) {
     print("Background task executed: $task");
-    // You can add your task checking code here
     return Future.value(true);
   });
 }
@@ -56,31 +53,28 @@ class MellowApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        scaffoldBackgroundColor:
-            const Color(0xFFF4F6F8), // Set the background color for all screens
+        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
         textTheme: const TextTheme(
           bodyLarge: TextStyle(color: Colors.black),
           bodyMedium: TextStyle(color: Colors.grey),
         ),
       ),
       home:
-          const AuthPage(), // This page decides where to navigate based on user authentication
+          const AuthPage(), // This will be replaced by the splash screen initially
       routes: {
-        '/signin': (context) => SignInPage(), // SignInPage route
-        '/signup': (context) => SignUpPersonalDetails(), // SignUpPage route
+        '/signin': (context) => SignInPage(),
+        '/signup': (context) => SignUpPersonalDetails(),
         '/dashboard': (context) {
           User? user = FirebaseAuth.instance.currentUser;
           if (user != null) {
-            return const DashboardScreen(); // Navigate to HomeScreen if authenticated
+            return const DashboardScreen();
           } else {
-            return SignInPage(); // Redirect to sign-in if no user is logged in
+            return SignInPage();
           }
         },
         '/profile': (context) => const ProfilePage(),
-        '/taskCreation': (context) =>
-            const TaskCreationScreen(), // Task Creation route
-        '/taskManagement': (context) =>
-            TaskManagementScreen(), // Task Management route
+        '/taskCreation': (context) => const TaskCreationScreen(),
+        '/taskManagement': (context) => TaskManagementScreen(),
         '/emailSent': (context) => const ForgotPasswordEmailSent(),
         '/notification': (context) => const NotificationScreen(),
         '/settings': (context) => const SettingsPage(),

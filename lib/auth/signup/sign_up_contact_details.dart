@@ -12,7 +12,8 @@ class SignUpContactDetails extends StatefulWidget {
   final String program;
   final String year;
 
-  SignUpContactDetails({
+  const SignUpContactDetails({
+    super.key,
     required this.firstName,
     required this.middleName,
     required this.lastName,

@@ -6,6 +6,8 @@ import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
 
 class SignInPage extends StatefulWidget {
+  const SignInPage({super.key});
+
   @override
   _SignInPageState createState() => _SignInPageState();
 }
@@ -199,7 +201,8 @@ class _SignInPageState extends State<SignInPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (context) => ForgotPassword()),
+                                      builder: (context) =>
+                                          const ForgotPassword()),
                                 );
                               },
                               child: const Text(
