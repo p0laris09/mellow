@@ -81,23 +81,23 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
 
     if (user != null) {
       try {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        setState(() {
-          userName = userDoc.exists ? userDoc['firstName'] ?? 'User' : 'User';
-        });
-
+        // Fetch the profile image using the provider, similar to the MyAppBar approach
         await profileImageProvider.fetchProfileImage(user);
+
+        // Set the default values if the profile image URL is null or empty
         setState(() {
-          profileImageUrl = profileImageProvider.profileImageUrl ?? '';
+          profileImageUrl =
+              profileImageProvider.profileImageUrl?.isNotEmpty ?? false
+                  ? profileImageProvider.profileImageUrl!
+                  : 'assets/img/default_profile.png';
+          userName = user.displayName ?? 'User';
         });
       } catch (e) {
+        // Fallback to default values if an error occurs
         print('Error loading profile: $e');
         setState(() {
+          profileImageUrl = 'assets/img/default_profile.png';
           userName = 'User';
-          profileImageUrl = '';
         });
       }
     }
@@ -115,8 +115,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: currentUser.uid)
-          .where('status', isNotEqualTo: 'Finished')
-          .get();
+          .where('status', whereIn: ['pending', 'ongoing', 'overdue']).get();
 
       List<DocumentSnapshot> tasks = querySnapshot.docs;
 
@@ -128,7 +127,8 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         return dueDateA.compareTo(dueDateB);
       });
 
-      if (mounted) {
+      if (mounted && tasks.length != _tasks.length) {
+        // Only update if the number of tasks has changed
         setState(() {
           _tasks = tasks;
         });
@@ -146,9 +146,11 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
           .limit(5)
           .get();
 
-      setState(() {
-        _recentSpaces = querySnapshot.docs;
-      });
+      if (mounted) {
+        setState(() {
+          _recentSpaces = querySnapshot.docs;
+        });
+      }
     } catch (e) {
       print("Error fetching recent spaces: $e");
     }
@@ -159,9 +161,11 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
       QuerySnapshot querySnapshot =
           await FirebaseFirestore.instance.collection('analytics').get();
 
-      setState(() {
-        hasAnalytics = querySnapshot.docs.isNotEmpty;
-      });
+      if (mounted) {
+        setState(() {
+          hasAnalytics = querySnapshot.docs.isNotEmpty;
+        });
+      }
     } catch (e) {
       print("Error checking analytics availability: $e");
     }
@@ -286,35 +290,6 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   }
 
   Widget _buildSpaceSection() {
-    if (_recentSpaces.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Text(
-                "Recent Spaces",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ),
-            const Text(
-              "No spaces were opened recently.",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
       child: Column(
@@ -331,35 +306,53 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          _buildRecentSpaceCards(),
+          _recentSpaces.isEmpty
+              ? const Text(
+                  "No spaces were opened recently.",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                )
+              : SizedBox(
+                  height: 120, // Adjust height to fit the cards
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _recentSpaces.length,
+                    itemBuilder: (context, index) {
+                      final space = _recentSpaces[index];
+                      final spaceName = space['name'] ?? 'Unnamed Space';
+                      final description = space['description'] ?? '';
+                      final createdAt =
+                          (space['createdAt'] as Timestamp?)?.toDate();
+                      final date = createdAt != null
+                          ? DateFormat('MMM d, yyyy').format(createdAt)
+                          : 'Unknown Date';
+                      final memberImages =
+                          List<String>.from(space['memberImages'] ?? []);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: RecentSpaceCard(
+                          spaceName: spaceName,
+                          description: description,
+                          date: date,
+                          memberImages: memberImages,
+                        ),
+                      );
+                    },
+                  ),
+                ),
         ],
       ),
     );
   }
 
-  Widget _buildRecentSpaceCards() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: _recentSpaces.map((space) {
-          return Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: RecentSpaceCard(
-              spaceName: space['name'] ?? 'Unnamed Space',
-              description: space['description'] ?? 'No description',
-              date: DateFormat('dd MMMM yyyy').format(
-                (space['createdAt'] as Timestamp).toDate(),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _buildTaskSection() {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 5.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -374,61 +367,66 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          if (_tasks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                'No tasks available.',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
-            )
-          else
-            ListView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              itemCount: _tasks.length,
-              itemBuilder: (context, index) {
-                DocumentSnapshot task = _tasks[index];
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('tasks')
+                .where('userId', isEqualTo: uid)
+                .where('status', whereIn: ['pending', 'ongoing', 'overdue'])
+                .orderBy('endTime', descending: false)
+                .snapshots()
+                .distinct(), // Avoid processing duplicate snapshots
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text("Error loading tasks: ${snapshot.error}");
+              }
 
-                DateTime startTime =
-                    (task['startTime'] as Timestamp?)?.toDate() ??
-                        DateTime.now();
-                DateTime dueDate =
-                    (task['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
-                String name = task['taskName'] ?? 'Unnamed Task';
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                // Prevent unnecessary state changes here
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    'No tasks available.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                );
+              }
 
-                String taskId = task.id;
-                String taskStatus = task['status'] ?? 'Pending';
+              var taskDocs = snapshot.data!.docs;
 
-                String formattedStartTime =
-                    DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
-                String formattedDueDate =
-                    DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+              return ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: taskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = taskDocs[index];
+                  String taskId = task.id;
+                  DateTime startTime =
+                      (task['startTime'] as Timestamp).toDate();
+                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+                  String name = task['taskName'] ?? 'Unnamed Task';
+                  String taskStatus = task['status'] ?? 'Pending';
 
-                DateTime now = DateTime.now();
+                  String formattedStartTime =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
 
-                bool isOverdue = now.isAfter(dueDate);
-                bool isOngoing =
-                    now.isAfter(startTime) && now.isBefore(dueDate);
-
-                if (taskStatus != 'Finished' &&
-                    (isOngoing || isOverdue || taskStatus == 'Pending')) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: TaskCard(
                       taskId: taskId,
                       taskName: name,
-                      startTime: formattedStartTime,
                       dueDate: formattedDueDate,
+                      startTime: formattedStartTime,
                       startDateTime: startTime,
                       dueDateTime: dueDate,
                       taskStatus: taskStatus,
                     ),
                   );
-                }
-                return const SizedBox.shrink(); // Skip tasks that are finished
-              },
-            ),
+                },
+              );
+            },
+          ),
         ],
       ),
     );

@@ -45,12 +45,12 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
       _errorMessage = null; // Clear previous error message
     });
 
-    // Check if fields are empty
+    // Check if required fields are empty
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
         _birthdayController.text.isEmpty) {
       setState(() {
-        _errorMessage = 'Please fill in all fields!';
+        _errorMessage = 'Please fill in all required fields!';
       });
       return;
     }
@@ -61,7 +61,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
       MaterialPageRoute(
         builder: (context) => SignUpCollegeDetails(
           firstName: _firstNameController.text,
-          middleName: _middleNameController.text,
+          middleName: _middleNameController.text, // Optional field
           lastName: _lastNameController.text,
           birthday: _birthdayController.text,
         ),
@@ -178,7 +178,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                         ],
                         controller: _middleNameController,
                         decoration: const InputDecoration(
-                          labelText: "Middle Name",
+                          labelText: "Middle Name (Optional)",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -239,7 +239,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                             icon: const Icon(Icons.calendar_today),
                             onPressed: () => _selectDate(context),
                           ),
-                          hintText: 'MM/dd/yyyy',
+                          hintText: 'mm/dd/yyyy',
                         ),
                       ),
                     ),

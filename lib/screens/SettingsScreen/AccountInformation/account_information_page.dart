@@ -66,12 +66,9 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
         _selectedImage = File(pickedFile.path); // Save the selected image
       });
 
-      // Show the cropped/selected image on the profile screen
-      File file = File(pickedFile.path);
-
       // Upload to Firebase Storage
       String filePath = 'profile_images/${user.uid}.png';
-      await FirebaseStorage.instance.ref(filePath).putFile(file);
+      await FirebaseStorage.instance.ref(filePath).putFile(_selectedImage!);
 
       // Get the download URL
       String downloadUrl =
@@ -127,6 +124,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
             String program = data['program'] ?? 'Not provided';
             String year = data['year'] ?? 'Not provided';
             String phoneNumber = data['phoneNumber'] ?? 'Not provided';
+            String section = data['section'] ?? 'Not provided';
             String email = data['email'] ??
                 FirebaseAuth.instance.currentUser?.email ??
                 'Not provided';
@@ -160,10 +158,12 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                                           height: 140,
                                           fit: BoxFit.cover,
                                         )
-                                      : const Icon(
-                                          Icons.person,
-                                          size: 70,
-                                          color: Colors.teal,
+                                      : Image.asset(
+                                          // Load default asset image
+                                          'assets/img/default_profile.png',
+                                          width: 140,
+                                          height: 140,
+                                          fit: BoxFit.cover,
                                         ),
                             ),
                           ),
@@ -201,6 +201,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                     _buildProfileDetail('College', college),
                     _buildProfileDetail('Program', program),
                     _buildProfileDetail('Year', year),
+                    _buildProfileDetail('Section', section),
                     _buildProfileDetail('Phone Number', phoneNumber),
                     // Add pen icon next to the email field
                     _buildProfileDetail(
@@ -228,7 +229,8 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (context) => UpdatePersonalInfo()),
+                                  builder: (context) =>
+                                      const UpdatePersonalInfo()),
                             );
                           },
                           style: ElevatedButton.styleFrom(

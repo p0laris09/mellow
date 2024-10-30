@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,7 @@ class AccountReviewScreen extends StatefulWidget {
   final String college;
   final String program;
   final String year;
+  final String section;
   final String phoneNumber;
   final String email;
   final String password;
@@ -25,6 +27,7 @@ class AccountReviewScreen extends StatefulWidget {
     required this.college,
     required this.program,
     required this.year,
+    required this.section,
     required this.phoneNumber,
     required this.email,
     required this.password,
@@ -35,10 +38,9 @@ class AccountReviewScreen extends StatefulWidget {
 }
 
 class _AccountReviewScreenState extends State<AccountReviewScreen> {
-  // State to manage password visibility
   bool _isPasswordVisible = false;
+  bool termsAccepted = false; // State to track checkbox
 
-  // Method to handle saving data to Firestore
   Future<void> _signUpUser() async {
     final FirebaseAuth auth = FirebaseAuth.instance;
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -62,11 +64,12 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
           'program': widget.program,
           'year': widget.year,
           'phoneNumber': widget.phoneNumber,
+          'section': widget.section,
           // Do not store password here
         });
 
         // Navigate to homepage after successful sign-up
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/dashboard');
       }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
@@ -145,7 +148,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
             ),
             const SizedBox(height: 30),
             SizedBox(
-              height: 700,
+              height: 730,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -188,6 +191,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                     _buildReviewRow("College:", widget.college),
                     _buildReviewRow("Program:", widget.program),
                     _buildReviewRow("Year:", widget.year),
+                    _buildReviewRow("Section:", widget.section),
                     const SizedBox(height: 20),
                     const Text(
                       'Login Details',
@@ -238,14 +242,60 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: termsAccepted,
+                          onChanged: (bool? newValue) {
+                            setState(() {
+                              termsAccepted = newValue ?? false;
+                            });
+                          },
+                        ),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              text: "I agree to the ",
+                              style: const TextStyle(color: Colors.black87),
+                              children: [
+                                TextSpan(
+                                  text: "Terms of Service",
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      Navigator.pushNamed(context, '/terms');
+                                    },
+                                ),
+                                const TextSpan(text: " and "),
+                                TextSpan(
+                                  text: "Privacy Policy",
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      Navigator.pushNamed(context, '/privacy');
+                                    },
+                                ),
+                                const TextSpan(text: "."),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     Center(
                       child: SizedBox(
                         width: 315,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed:
-                              _signUpUser, // Trigger the Firestore save on button press
+                          onPressed: termsAccepted ? _signUpUser : null,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -273,7 +323,6 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
     );
   }
 
-  // Helper method to build rows for the review
   Widget _buildReviewRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),

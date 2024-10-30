@@ -3,12 +3,172 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/models/TaskModel/task_model.dart';
 
 class TaskCreationScreen extends StatefulWidget {
   const TaskCreationScreen({super.key});
 
   @override
   State<TaskCreationScreen> createState() => _TaskCreationScreenState();
+}
+
+class TaskManager {
+  List<Task> tasks = [];
+
+  // Load existing tasks from Firestore
+  Future<void> loadTasksFromFirestore(String userId) async {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    tasks = querySnapshot.docs.map((doc) {
+      Map<String, dynamic> data = doc.data();
+      return Task(
+        taskName: data['taskName'],
+        dueDate: (data['dueDate'] as Timestamp).toDate(),
+        startTime: (data['startTime'] as Timestamp).toDate(),
+        endTime: (data['endTime'] as Timestamp).toDate(),
+        description: data['description'] ?? '',
+        priority: data['priority'] ?? 1.0,
+        urgency: data['urgency'] ?? 1.0,
+        importance: data['importance'] ?? 1.0,
+        complexity: data['complexity'] ?? 1.0,
+      );
+    }).toList();
+  }
+
+  // Suggest best times based on existing tasks
+  // Suggest best times based on existing tasks
+  List<DateTime> suggestBestTimes(Task newTask) {
+    List<DateTime> bestTimes = [];
+    Duration taskDuration = newTask.endTime.difference(newTask.startTime);
+
+    // Define the number of days to check for available time slots
+    const int daysToCheck = 7; // Check for the next 7 days
+    DateTime now = DateTime.now();
+
+    // Loop through the next 'daysToCheck' days
+    for (int i = 0; i < daysToCheck; i++) {
+      DateTime checkDate = now.add(Duration(days: i));
+
+      // Define time range for the day (from 8 AM to 8 PM, for example)
+      DateTime startOfDay =
+          DateTime(checkDate.year, checkDate.month, checkDate.day, 8, 0);
+      DateTime endOfDay =
+          DateTime(checkDate.year, checkDate.month, checkDate.day, 20, 0);
+
+      // Check for conflicts within the defined day range
+      for (DateTime time = startOfDay;
+          time.isBefore(endOfDay);
+          time = time.add(Duration(minutes: 30))) {
+        DateTime proposedStart = time;
+        DateTime proposedEnd = proposedStart.add(taskDuration);
+
+        // Check if proposed time conflicts with existing tasks and is in the future
+        bool conflict = tasks.any((task) {
+          return (proposedStart.isBefore(task.endTime) &&
+              proposedEnd.isAfter(task.startTime));
+        });
+
+        // Ensure the proposed time is in the future
+        if (!conflict && proposedStart.isAfter(now)) {
+          bestTimes.add(proposedStart);
+        }
+      }
+    }
+
+    return bestTimes.take(2).toList(); // Return top 2 best times
+  }
+
+  // Add task with conflict resolution
+  Future<void> addTaskWithConflictResolution(Task newTask, BuildContext context,
+      String? userId, Function(Task) onTaskResolved) async {
+    // Check for conflicts with existing tasks
+    bool conflictDetected = tasks.any((task) {
+      return (newTask.startTime.isBefore(task.endTime) &&
+          newTask.endTime.isAfter(task.startTime));
+    });
+
+    print('Conflict detected: $conflictDetected'); // Debugging line
+
+    if (conflictDetected) {
+      // Show conflict dialog
+      await showConflictDialog(newTask, context, onTaskResolved);
+    } else {
+      // No conflict, proceed to resolve task directly
+      onTaskResolved(newTask);
+    }
+  }
+
+  // Show conflict dialog (already implemented)
+  Future<void> showConflictDialog(Task conflictingTask, BuildContext context,
+      Function(Task) onTaskResolved) async {
+    List<DateTime> bestTimes = suggestBestTimes(conflictingTask);
+
+    if (bestTimes.isEmpty) {
+      print('No available times found.');
+      return;
+    }
+
+    // Save the duration before updating startTime
+    final duration =
+        conflictingTask.endTime.difference(conflictingTask.startTime);
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Task Conflict Detected'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                  'The task "${conflictingTask.taskName}" conflicts with another task.'),
+              Text(
+                  'Suggested Best Time: ${DateFormat('yyyy-MM-dd HH:mm').format(bestTimes.first)}'),
+              Text(
+                  'Second Best Time: ${bestTimes.length > 1 ? DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[1]) : "None"}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Choose Best Time
+                conflictingTask.startTime = bestTimes.first;
+                conflictingTask.endTime =
+                    conflictingTask.startTime.add(duration);
+                onTaskResolved(
+                    conflictingTask); // Notify that the task has been resolved
+                Navigator.pop(context); // Close dialog
+              },
+              child: const Text('Choose Best Time'),
+            ),
+            if (bestTimes.length > 1)
+              TextButton(
+                onPressed: () {
+                  // Choose Second Best Time
+                  conflictingTask.startTime = bestTimes[1];
+                  conflictingTask.endTime =
+                      conflictingTask.startTime.add(duration);
+                  onTaskResolved(
+                      conflictingTask); // Notify that the task has been resolved
+                  Navigator.pop(context); // Close dialog
+                },
+                child: const Text('Choose Second Best Time'),
+              ),
+            TextButton(
+              onPressed: () {
+                // Just close the dialog without any action
+                Navigator.pop(context);
+              },
+              child: const Text('Change the time instead'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _TaskCreationScreenState extends State<TaskCreationScreen> {
@@ -37,10 +197,11 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
 
   Future<void> _selectDateTime(
       BuildContext context, TextEditingController controller) async {
+    DateTime now = DateTime.now();
     DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
+      initialDate: now,
+      firstDate: now, // Prevent picking past dates
       lastDate: DateTime(2101),
     );
 
@@ -59,9 +220,16 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           pickedTime.minute,
         );
 
-        String formattedDateTime =
-            DateFormat('yyyy-MM-dd HH:mm').format(combinedDateTime);
-        controller.text = formattedDateTime;
+        if (combinedDateTime.isAfter(now)) {
+          // Only allow future times
+          String formattedDateTime =
+              DateFormat('yyyy-MM-dd HH:mm').format(combinedDateTime);
+          controller.text = formattedDateTime;
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select a future time.')),
+          );
+        }
       }
     }
   }
@@ -90,29 +258,36 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         startTime != null &&
         endTime != null &&
         userId != null) {
-      // Get current time
-      DateTime currentTime = DateTime.now();
+      Task newTask = Task(
+        taskName: taskName,
+        dueDate: dueDate,
+        startTime: startTime,
+        endTime: endTime,
+        description: description,
+        priority: _priority,
+        urgency: _urgency,
+        importance: _importance,
+        complexity: _complexity,
+      );
 
-      // Determine initial status
-      String status;
-      if (currentTime.isBefore(startTime)) {
-        status = 'pending'; // Task hasn't started yet
-      } else if (currentTime.isAfter(startTime) &&
-          currentTime.isBefore(dueDate)) {
-        status = 'ongoing'; // Task is ongoing
-      } else {
-        status = 'overdue'; // Task is overdue
-      }
+      TaskManager taskManager = TaskManager();
 
-      CollectionReference tasks =
-          FirebaseFirestore.instance.collection('tasks');
+      // Load existing tasks before checking for conflicts
+      await taskManager.loadTasksFromFirestore(userId);
 
-      try {
-        await tasks.add({
-          'taskName': taskName,
+      // Debugging logs
+      print("Existing tasks loaded: ${taskManager.tasks.length}");
+
+      // Add task with conflict resolution and userId
+      await taskManager.addTaskWithConflictResolution(newTask, context, userId,
+          (resolvedTask) async {
+        // Only save to Firestore if a task is resolved
+        await FirebaseFirestore.instance.collection('tasks').add({
+          'taskName': resolvedTask.taskName,
           'dueDate': Timestamp.fromDate(dueDate),
-          'startTime': Timestamp.fromDate(startTime),
-          'endTime': Timestamp.fromDate(endTime),
+          'startTime':
+              Timestamp.fromDate(resolvedTask.startTime), // Updated time
+          'endTime': Timestamp.fromDate(resolvedTask.endTime), // Updated time
           'description': description,
           'priority': _priority,
           'urgency': _urgency,
@@ -120,21 +295,15 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           'complexity': _complexity,
           'createdAt': Timestamp.now(),
           'userId': userId,
-          'status': status, // Set initial status
+          'status': 'pending', // Initial status
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Task created successfully!')),
         );
 
-        // Navigate back to TaskManagementScreen after task creation
-        Navigator.pop(context);
-      } catch (e) {
-        print("Error creating task: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create task.')),
-        );
-      }
+        Navigator.pop(context); // Close creation screen
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields.')),

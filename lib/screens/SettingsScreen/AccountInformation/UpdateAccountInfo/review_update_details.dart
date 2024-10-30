@@ -12,6 +12,7 @@ class AccountUpdateScreen extends StatefulWidget {
   final String college;
   final String program;
   final String year;
+  final String section;
 
   const AccountUpdateScreen({
     super.key,
@@ -24,6 +25,7 @@ class AccountUpdateScreen extends StatefulWidget {
     required this.college,
     required this.program,
     required this.year,
+    required this.section,
   });
 
   @override
@@ -51,6 +53,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
           'college': widget.college,
           'program': widget.program,
           'year': widget.year,
+          'section': widget.section,
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -58,7 +61,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
         );
 
         // Navigate to homepage after successful update
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/dashboard');
       } catch (error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update account: $error')),
@@ -107,7 +110,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
             ),
             const SizedBox(height: 30),
             SizedBox(
-              height: 700,
+              height: 660,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -151,6 +154,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
                     _buildReviewRow("College:", widget.college),
                     _buildReviewRow("Program:", widget.program),
                     _buildReviewRow("Year:", widget.year),
+                    _buildReviewRow("Section:", widget.section),
                     const SizedBox(height: 40),
                     Center(
                       child: SizedBox(

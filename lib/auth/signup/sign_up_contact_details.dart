@@ -11,6 +11,7 @@ class SignUpContactDetails extends StatefulWidget {
   final String college;
   final String program;
   final String year;
+  final String section;
 
   const SignUpContactDetails({
     super.key,
@@ -22,6 +23,7 @@ class SignUpContactDetails extends StatefulWidget {
     required this.college,
     required this.program,
     required this.year,
+    required this.section,
   });
 
   @override
@@ -55,10 +57,9 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
 
   void _validateAndNavigate() {
     setState(() {
-      _errorMessage = null; // Clear previous error message
+      _errorMessage = null;
     });
 
-    // Check if fields are empty
     if (_phoneController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty ||
@@ -69,7 +70,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
       return;
     }
 
-    // Validate phone number
     if (!isValidPhilippinePhoneNumber(_phoneController.text)) {
       setState(() {
         _errorMessage =
@@ -78,7 +78,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
       return;
     }
 
-    // Validate email
     if (!emailRegExp.hasMatch(_emailController.text)) {
       setState(() {
         _errorMessage = 'Please enter a valid email address.';
@@ -86,7 +85,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
       return;
     }
 
-    // Validate password (min 8 chars, upper and lowercase letter, and special character)
     if (!passwordRegExp.hasMatch(_passwordController.text)) {
       setState(() {
         _errorMessage =
@@ -95,7 +93,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
       return;
     }
 
-    // Check if passwords match
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
         _errorMessage = 'Passwords do not match!';
@@ -103,7 +100,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
       return;
     }
 
-    // Navigate to the next page if validation passes
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -116,6 +112,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
           college: widget.college,
           program: widget.program,
           year: widget.year,
+          section: widget.section, // Pass section here
           phoneNumber: _phoneController.text,
           email: _emailController.text,
           password: _passwordController.text,

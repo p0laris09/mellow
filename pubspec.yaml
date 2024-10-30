@@ -19,6 +19,9 @@ dependencies:
   font_awesome_flutter: ^10.7.0
   provider: ^6.1.2
   flutter_native_splash: ^2.4.2
+  flutter_local_notifications: ^17.2.4
+  permission_handler: ^11.3.1
+  timezone: ^0.9.4
     
 
 dev_dependencies:
@@ -32,3 +35,6 @@ flutter:
     - assets/img/logo.png
     - assets/img/splash_logo.png
     - assets/img/app_icon.png
+    - assets/img/default_profile.png
+    - assets/img/default_banner.png
+
