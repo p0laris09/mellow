@@ -19,6 +19,9 @@ class _ProfilePageState extends State<ProfilePage> {
   String program = 'Loading...';
   String year = 'Loading...';
   bool isLoading = true;
+  int tasksCount = 0;
+  int friendsCount = 0;
+  int spaceCount = 0;
 
   @override
   void initState() {
@@ -47,9 +50,9 @@ class _ProfilePageState extends State<ProfilePage> {
             college = userDoc['college'];
             program = userDoc['program'];
             year = userDoc['year'];
-            isLoading = false;
           });
 
+          // Fetch profile image
           await profileImageProvider.fetchProfileImage(user);
           setState(() {
             profileImageUrl =
@@ -57,9 +60,53 @@ class _ProfilePageState extends State<ProfilePage> {
                     ? profileImageProvider.profileImageUrl!
                     : 'assets/img/default_profile.png';
           });
+
+          // Fetch tasks count
+          QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('tasks')
+              .get();
+          setState(() {
+            tasksCount = tasksSnapshot.size;
+          });
+
+          // Fetch accepted friends count from friend requests
+          // Query for accepted friends where current user is toUserId
+          QuerySnapshot friendsAsReceiverSnapshot = await FirebaseFirestore
+              .instance
+              .collection('friends_request')
+              .where('status', isEqualTo: 'accepted')
+              .where('toUserId', isEqualTo: userId)
+              .get();
+
+          // Query for accepted friends where current user is fromUserId
+          QuerySnapshot friendsAsSenderSnapshot = await FirebaseFirestore
+              .instance
+              .collection('friends_request')
+              .where('status', isEqualTo: 'accepted')
+              .where('fromUserId', isEqualTo: userId)
+              .get();
+
+          // Combine counts
+          setState(() {
+            friendsCount =
+                friendsAsReceiverSnapshot.size + friendsAsSenderSnapshot.size;
+          });
+
+          // Fetch space count if needed
+          QuerySnapshot spaceSnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('space')
+              .get();
+          setState(() {
+            spaceCount = spaceSnapshot.size;
+          });
         }
       } catch (e) {
         print('Error loading user profile: $e');
+      } finally {
         setState(() {
           isLoading = false;
         });
@@ -97,9 +144,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _buildStatItem('671', 'Tasks'),
-                              _buildStatItem('10.6k', 'Space'),
-                              _buildStatItem('562', 'Friends'),
+                              _buildStatItem(tasksCount.toString(), 'Tasks'),
+                              _buildStatItem(spaceCount.toString(), 'Space'),
+                              _buildStatItem(
+                                  friendsCount.toString(), 'Friends'),
                             ],
                           ),
                         ),

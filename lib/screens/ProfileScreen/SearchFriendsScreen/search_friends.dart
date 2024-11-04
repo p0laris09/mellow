@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/add_friend.dart';
+import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/friend_request.dart';
 import 'package:mellow/screens/ProfileScreen/ViewProfile/view_profile.dart';
 
 class SearchFriends extends StatefulWidget {
@@ -21,27 +23,22 @@ class _SearchFriendsState extends State<SearchFriends> {
   }
 
   Future<void> _fetchUsers() async {
-    // Check if user is authenticated
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       print("User is not authenticated");
-      return; // Exit if not authenticated
+      return;
     }
 
     try {
       final querySnapshot =
           await FirebaseFirestore.instance.collection('users').get();
 
-      print("Number of documents fetched: ${querySnapshot.docs.length}");
-
       final users = querySnapshot.docs.map((doc) {
         final data = doc.data();
-        // Construct the name based on first, middle, and last names
         final firstName = data['firstName'] ?? 'Unnamed';
         final middleName = data['middleName'] ?? '';
         final lastName = data['lastName'] ?? '';
 
-        // Format the name as required: "First MiddleInitial Last"
         String formattedName = '$firstName';
         if (middleName.isNotEmpty) {
           formattedName += ' ${middleName[0]}.';
@@ -50,26 +47,21 @@ class _SearchFriendsState extends State<SearchFriends> {
           formattedName += ' $lastName';
         }
 
-        // Return the user data with an additional userId field for filtering
         return {
-          'userId': doc.id, // Store the document ID for reference
+          'userId': doc.id,
           'name': formattedName,
           'profileImageUrl':
               data['profileImageUrl'] ?? 'assets/img/default_profile.png',
         };
       }).toList();
 
-      // Filter out the current user's data
       final filteredUsers =
           users.where((user) => user['userId'] != currentUser.uid).toList();
 
       setState(() {
         allUsers = users;
-        this.filteredUsers =
-            filteredUsers; // Start with all users excluding the current user
+        this.filteredUsers = filteredUsers;
       });
-
-      print("Fetched users: $allUsers");
     } catch (e) {
       print("Error fetching users: $e");
     }
@@ -83,7 +75,6 @@ class _SearchFriendsState extends State<SearchFriends> {
         return name.contains(searchLower);
       }).toList();
 
-      // Sort users to show matching results at the top
       filteredUsers.sort((a, b) {
         final aName = a['name']!.toLowerCase();
         final bName = b['name']!.toLowerCase();
@@ -97,6 +88,55 @@ class _SearchFriendsState extends State<SearchFriends> {
         return 0;
       });
     });
+  }
+
+  void _navigateToFriendPage(String selectedUserId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final docOutgoing = await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .doc('${currentUser.uid}-$selectedUserId')
+        .get();
+
+    final docIncoming = await FirebaseFirestore.instance
+        .collection('friend_requests')
+        .doc('${selectedUserId}-${currentUser.uid}')
+        .get();
+
+    String friendRequestStatus;
+    String fromUserId = ''; // Initialize with an empty string
+    String toUserId = ''; // Initialize with an empty string
+
+    if (docOutgoing.exists) {
+      friendRequestStatus = docOutgoing['status'];
+      fromUserId = docOutgoing['fromUserId'];
+      toUserId = docOutgoing['toUserId'];
+    } else if (docIncoming.exists) {
+      friendRequestStatus = docIncoming['status'];
+      fromUserId = docIncoming['fromUserId'];
+      toUserId = docIncoming['toUserId'];
+    } else {
+      friendRequestStatus = 'none';
+    }
+
+    Widget targetPage;
+    if (friendRequestStatus == 'accepted') {
+      targetPage = ViewProfile(userId: selectedUserId);
+    } else if (friendRequestStatus == 'pending' &&
+        fromUserId == currentUser.uid) {
+      targetPage = AddFriend(userId: selectedUserId);
+    } else if (friendRequestStatus == 'pending' &&
+        toUserId == currentUser.uid) {
+      targetPage = FriendRequest(userId: selectedUserId);
+    } else {
+      targetPage = AddFriend(userId: selectedUserId);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => targetPage),
+    );
   }
 
   @override
@@ -115,8 +155,7 @@ class _SearchFriendsState extends State<SearchFriends> {
           alignment: Alignment.center,
           child: Container(
             height: 35,
-            width: MediaQuery.of(context).size.width *
-                0.75, // Adjust width as needed
+            width: MediaQuery.of(context).size.width * 0.75,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: const Color(0xFF3B4B4B),
@@ -138,9 +177,7 @@ class _SearchFriendsState extends State<SearchFriends> {
         ),
       ),
       body: filteredUsers.isEmpty
-          ? const Center(
-              child:
-                  CircularProgressIndicator()) // Show loading indicator while fetching
+          ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               padding: const EdgeInsets.all(8),
               itemCount: filteredUsers.length,
@@ -161,14 +198,7 @@ class _SearchFriendsState extends State<SearchFriends> {
                       style: const TextStyle(color: Colors.black),
                     ),
                     onTap: () {
-                      // Navigate to ProfileDetailPage
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ViewProfile(userId: user['userId']),
-                        ),
-                      );
+                      _navigateToFriendPage(user['userId']);
                     },
                   ),
                 );

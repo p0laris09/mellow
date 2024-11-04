@@ -1,18 +1,20 @@
-import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/add_friend.dart';
+import 'package:mellow/screens/ProfileScreen/ViewProfile/view_profile.dart';
 
-class ViewProfile extends StatefulWidget {
+class FriendRequest extends StatefulWidget {
   final String userId;
 
-  const ViewProfile({Key? key, required this.userId}) : super(key: key);
+  const FriendRequest({Key? key, required this.userId}) : super(key: key);
 
   @override
-  _ViewProfileState createState() => _ViewProfileState();
+  _FriendRequestState createState() => _FriendRequestState();
 }
 
-class _ViewProfileState extends State<ViewProfile> {
+class _FriendRequestState extends State<FriendRequest> {
+  String currentUserId = '';
   String userName = 'Loading...';
   String profileImageUrl = '';
   String userSection = 'Loading...';
@@ -21,82 +23,18 @@ class _ViewProfileState extends State<ViewProfile> {
   String year = 'Loading...';
   bool isLoading = true;
   String errorMessage = '';
-  String currentUserId = '';
-  bool isFriend = false;
-
-  int taskCount = 0;
-  int spaceCount = 0;
-  int friendCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializeProfileAndFriendStatus();
+    _setCurrentUser();
+    _loadUserProfile();
   }
 
-  Future<void> _initializeProfileAndFriendStatus() async {
-    try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        setState(() {
-          errorMessage = 'User not authenticated';
-          isLoading = false;
-        });
-        return;
-      }
+  Future<void> _setCurrentUser() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
       currentUserId = currentUser.uid;
-
-      // Check if the current user is friends with the profile user
-      await _checkFriendshipStatus();
-
-      if (isFriend) {
-        // Load user profile if friends
-        await _loadUserProfile();
-      } else {
-        setState(() {
-          errorMessage = 'You are not friends with this user.';
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = 'An error occurred: $e';
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _checkFriendshipStatus() async {
-    try {
-      DocumentSnapshot currentUserDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .get();
-
-      if (currentUserDoc.exists) {
-        final data = currentUserDoc.data() as Map<String, dynamic>;
-        List<dynamic> friends = data['friends'] ?? [];
-
-        if (friends.contains(widget.userId)) {
-          setState(() {
-            isFriend = true;
-          });
-        } else {
-          setState(() {
-            isFriend = false;
-          });
-        }
-      } else {
-        setState(() {
-          errorMessage = 'Current user not found.';
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = 'Failed to check friendship status.';
-        isLoading = false;
-      });
     }
   }
 
@@ -116,10 +54,6 @@ class _ViewProfileState extends State<ViewProfile> {
           program = data['program'] ?? 'N/A';
           year = data['year'] ?? 'N/A';
           profileImageUrl = data['profileImageUrl'] ?? '';
-          taskCount = data['tasks']?.length ?? 0; // Assume tasks is a list
-          spaceCount = data['space'] ?? 0; // Adjust as per your data structure
-          friendCount =
-              data['friends']?.length ?? 0; // Assume friends is a list
           isLoading = false;
         });
       } else {
@@ -136,31 +70,83 @@ class _ViewProfileState extends State<ViewProfile> {
     }
   }
 
-  Future<void> _unfriendUser() async {
+  Future<void> _acceptFriendRequest() async {
     try {
+      // Update friend request status to 'accepted'
+      await FirebaseFirestore.instance
+          .collection('friend_requests')
+          .doc('${widget.userId}-$currentUserId')
+          .update({'status': 'accepted'});
+
+      // Add each other as friends
       await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
           .update({
-        'friends': FieldValue.arrayRemove([widget.userId])
+        'friends': FieldValue.arrayUnion([widget.userId])
       });
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
           .update({
-        'friends': FieldValue.arrayRemove([currentUserId])
+        'friends': FieldValue.arrayUnion([currentUserId])
       });
 
-      setState(() {
-        isFriend = false;
-        friendCount--; // Decrease friend count
-      });
+      print('Friend request accepted. Updated friends lists.');
+
+      // Send a notification
+      await _sendNotification(
+          widget.userId, 'Friend Request Accepted', 'You are now friends.');
+
+      // Navigate to ViewProfile
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) => ViewProfile(userId: widget.userId)),
+      );
     } catch (e) {
       setState(() {
-        errorMessage = 'Failed to unfriend user: $e';
+        errorMessage = 'Error accepting friend request.';
+      });
+      print('Error accepting friend request: $e'); // Debugging
+    }
+  }
+
+  Future<void> _declineFriendRequest() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('friend_requests')
+          .doc('${widget.userId}-$currentUserId')
+          .delete();
+
+      // Send a notification
+      await _sendNotification(
+          widget.userId, 'Friend Request Declined', 'Friend request declined.');
+
+      // Navigate to AddFriend
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) => AddFriend(userId: widget.userId)),
+      );
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error declining friend request.';
       });
     }
+  }
+
+  Future<void> _sendNotification(
+      String receiverId, String title, String message) async {
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'receiverId': receiverId,
+      'title': title,
+      'message': message,
+      'timestamp': FieldValue.serverTimestamp(),
+      'status': title == 'Friend Request Accepted'
+          ? 'Now Friends'
+          : 'Request Declined',
+    });
   }
 
   @override
@@ -178,11 +164,11 @@ class _ViewProfileState extends State<ViewProfile> {
                   child: Text(errorMessage,
                       style: const TextStyle(color: Colors.red)),
                 )
-              : _buildProfileContent(),
+              : _buildFriendRequestContent(),
     );
   }
 
-  Widget _buildProfileContent() {
+  Widget _buildFriendRequestContent() {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -204,9 +190,9 @@ class _ViewProfileState extends State<ViewProfile> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatItem(taskCount.toString(), 'Tasks'),
-                      _buildStatItem(spaceCount.toString(), 'Space'),
-                      _buildStatItem(friendCount.toString(), 'Friends'),
+                      _buildStatItem('671', 'Tasks'),
+                      _buildStatItem('10.6k', 'Space'),
+                      _buildStatItem('562', 'Friends'),
                     ],
                   ),
                 ),
@@ -234,12 +220,22 @@ class _ViewProfileState extends State<ViewProfile> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            // Unfriend button
-            ElevatedButton(
-              onPressed: isFriend ? _unfriendUser : null,
-              child: const Text('Unfriend'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: _acceptFriendRequest,
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text('Accept'),
+                ),
+                ElevatedButton(
+                  onPressed: _declineFriendRequest,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Decline'),
+                ),
+              ],
             ),
           ],
         ),
