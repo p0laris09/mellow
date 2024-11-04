@@ -4,11 +4,13 @@ class SpaceCard extends StatelessWidget {
   final String spaceName;
   final String description;
   final String date;
+  final List<String> memberIcons;
 
   const SpaceCard({
     required this.spaceName,
     required this.description,
     required this.date,
+    required this.memberIcons,
     super.key,
   });
 
@@ -17,13 +19,13 @@ class SpaceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.white, // Match the task card background color
-        borderRadius: BorderRadius.circular(12.0), // Rounded corners
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 6.0,
-            offset: const Offset(0, 2), // Soft shadow
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -70,38 +72,17 @@ class SpaceCard extends StatelessWidget {
   }
 
   Widget _buildAvatarsRow() {
-    return const Row(
-      children: [
-        CircleAvatar(
-          backgroundColor: Colors.grey,
-          radius: 12,
-          child: Icon(
-            Icons.person,
-            size: 12,
-            color: Color(0xFF2C3C3C),
+    return Row(
+      children: memberIcons.take(3).map((iconUrl) {
+        return Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: CircleAvatar(
+            radius: 12,
+            backgroundImage: NetworkImage(iconUrl),
+            backgroundColor: Colors.grey,
           ),
-        ),
-        SizedBox(width: 4),
-        CircleAvatar(
-          backgroundColor: Colors.grey,
-          radius: 12,
-          child: Icon(
-            Icons.person,
-            size: 12,
-            color: Color(0xFF2C3C3C),
-          ),
-        ),
-        SizedBox(width: 4),
-        CircleAvatar(
-          backgroundColor: Colors.grey,
-          radius: 12,
-          child: Icon(
-            Icons.person,
-            size: 12,
-            color: Color(0xFF2C3C3C),
-          ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 }

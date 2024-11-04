@@ -66,20 +66,14 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
         const SizedBox(width: 7.5),
         GestureDetector(
           onTap: () {
-            Navigator.pushNamed(context, '/settings');
+            Navigator.pushNamed(context, '/settingsdrawer');
           },
           child: CircleAvatar(
             radius: 16,
             backgroundColor: Colors.white,
             backgroundImage: profileImageProvider.profileImageUrl != null
                 ? NetworkImage(profileImageProvider.profileImageUrl!)
-                : null,
-            child: profileImageProvider.profileImageUrl == null
-                ? const Icon(
-                    Icons.person,
-                    color: Colors.blueGrey,
-                  )
-                : null,
+                : AssetImage('assets/img/default_profile.png') as ImageProvider,
           ),
         ),
         const SizedBox(width: 10),

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateAccountInfo/review_update_details.dart';
@@ -27,8 +29,8 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
       TextEditingController(text: "University of Makati");
   final TextEditingController _collegeController = TextEditingController();
   final TextEditingController _programController = TextEditingController();
+  final TextEditingController _sectionController = TextEditingController();
 
-  // For dropdown
   String? _selectedYear;
   final List<String> _years = [
     '1st Year',
@@ -36,9 +38,42 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
     '3rd Year',
     '4th Year',
     '5th Year'
-  ]; // List of years
+  ];
 
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+
+        if (userDoc.exists) {
+          setState(() {
+            _universityController.text =
+                userDoc['university'] ?? 'University of Makati';
+            _collegeController.text = userDoc['college'] ?? '';
+            _programController.text = userDoc['program'] ?? '';
+            _selectedYear = userDoc['year'] ?? _years.first;
+            _sectionController.text = userDoc['section'] ?? '';
+          });
+        }
+      }
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Failed to load data: $error';
+      });
+    }
+  }
 
   void _validateAndNavigate() {
     setState(() {
@@ -69,6 +104,7 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
           college: _collegeController.text,
           program: _programController.text,
           year: _selectedYear!,
+          section: _sectionController.text,
         ),
       ),
     );
@@ -236,6 +272,25 @@ class _UpdateCollegeInfoState extends State<UpdateCollegeInfo> {
                           });
                         },
                         menuMaxHeight: 300, // Adjust the height as needed
+                      ),
+                    ),
+
+                    // Section
+                    SizedBox(
+                      width: 300,
+                      child: TextField(
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(200),
+                        ],
+                        controller: _sectionController,
+                        decoration: const InputDecoration(
+                          labelText: "Section",
+                          labelStyle: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          border: UnderlineInputBorder(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 50),

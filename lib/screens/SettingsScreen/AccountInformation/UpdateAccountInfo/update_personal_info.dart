@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +23,40 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
   // Phone number validation starts with +63 9 and follows by 9 digits
   bool isValidPhilippinePhoneNumber(String phoneNumber) {
     return RegExp(r'^\+63 9\d{9}$').hasMatch(phoneNumber);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+
+        // Populate each text field with data from Firestore
+        _firstNameController.text = userDoc['firstName'] ?? '';
+        _middleNameController.text = userDoc['middleName'] ?? '';
+        _lastNameController.text = userDoc['lastName'] ?? '';
+        _birthdayController.text = userDoc['birthday'] ?? '';
+        _phoneController.text = userDoc['phoneNumber'] ?? '+63 9';
+
+        // Parse birthday string into DateTime if available
+        if (userDoc['birthday'] != null) {
+          _selectedDate = DateFormat('MM/dd/yyyy').parse(userDoc['birthday']);
+        }
+      }
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Failed to load data: $error';
+      });
+    }
   }
 
   String? _errorMessage;
@@ -237,7 +273,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                             icon: const Icon(Icons.calendar_today),
                             onPressed: () => _selectDate(context),
                           ),
-                          hintText: 'MM/dd/yyyy',
+                          hintText: 'mm/dd/yyyy',
                         ),
                       ),
                     ),

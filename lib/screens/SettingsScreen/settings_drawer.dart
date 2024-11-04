@@ -3,21 +3,23 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/account_information_page.dart';
+import 'package:mellow/screens/SettingsScreen/PrivacyPolicy/privacy_policy.dart';
+import 'package:mellow/screens/SettingsScreen/TermsOfService/terms_of_service.dart';
+import 'package:mellow/screens/SettingsScreen/settings_page.dart';
 
-class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+class SettingsDrawer extends StatefulWidget {
+  const SettingsDrawer({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  State<SettingsDrawer> createState() => _SettingsDrawerState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsDrawerState extends State<SettingsDrawer> {
   // Method to get the user's email
   String? _getUserEmail(User? user) {
     return user?.email; // Return the email of the authenticated user
   }
 
-  // Method to get the user's profile image URL
   Future<String?> _getProfileImageUrl(User? user) async {
     if (user != null && user.photoURL != null) {
       return user.photoURL; // Return the user's photo URL from Firebase Auth
@@ -34,13 +36,17 @@ class _SettingsPageState extends State<SettingsPage> {
     return null; // Return null if no image found
   }
 
-  // Method to get a default profile image from Firebase Storage
   Future<String> _getDefaultProfileImageUrl() async {
-    Reference storageRef = FirebaseStorage.instance
-        .ref()
-        .child('default_images/default_profile.png');
-    String imageUrl = await storageRef.getDownloadURL();
-    return imageUrl;
+    try {
+      Reference storageRef = FirebaseStorage.instance
+          .ref()
+          .child('default_images/default_profile.png');
+      String imageUrl = await storageRef.getDownloadURL();
+      return imageUrl;
+    } catch (e) {
+      print('Error fetching default profile image: $e');
+      return ''; // Return empty string or a fallback URL
+    }
   }
 
   // Method to get the user's full name
@@ -94,33 +100,30 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               // Profile Section (Top)
               FutureBuilder<String?>(
-                future: _getProfileImageUrl(user), // Fetch the profile image
+                // Fetch the profile image
+                future: _getProfileImageUrl(user),
                 builder: (context, imageSnapshot) {
                   String? imageUrl = imageSnapshot.data;
 
                   return ListTile(
+                    // In the ListTile where you fetch the image
                     leading: FutureBuilder<String>(
-                      future: imageUrl != null
+                      future: imageUrl != null && imageUrl.isNotEmpty
                           ? Future.value(imageUrl)
                           : _getDefaultProfileImageUrl(),
                       builder: (context, defaultImageSnapshot) {
                         if (defaultImageSnapshot.connectionState ==
                             ConnectionState.waiting) {
-                          // Show a loading indicator while waiting for the default image
                           return const CircleAvatar(
                             radius: 30,
-                            child:
-                                CircularProgressIndicator(), // Optional: Loading state
+                            child: CircularProgressIndicator(),
                           );
                         } else if (defaultImageSnapshot.hasError) {
-                          // Handle the error case if retrieving the default profile image fails
                           return const CircleAvatar(
                             radius: 30,
-                            child: Icon(Icons.error,
-                                size: 30), // Display an error icon
+                            child: Icon(Icons.error, size: 30),
                           );
                         } else {
-                          // Once the future resolves, display either the user's image or the default image
                           String resolvedImageUrl = defaultImageSnapshot.data!;
                           return CircleAvatar(
                             radius: 30,
@@ -129,6 +132,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         }
                       },
                     ),
+
                     title: Text(
                       fullName, // Display fetched full name
                       style: const TextStyle(
@@ -189,6 +193,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     const Icon(Icons.arrow_forward_ios, color: Colors.grey),
                 onTap: () {
                   // Navigate to Notifications page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsPage(),
+                    ),
+                  );
                 },
               ),
 
@@ -216,26 +226,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 leading: const Icon(Icons.logout, color: Colors.black),
                 title:
                     const Text('Logout', style: TextStyle(color: Colors.black)),
-                trailing:
-                    const Icon(Icons.arrow_forward_ios, color: Colors.grey),
-                onTap: () {
-                  _logout(context); // Call the logout function when pressed
-                },
-              ),
-              const Divider(color: Colors.grey), // Grey divider for contrast
-
-              ListTile(
-                title: const Text('Privacy Policy',
-                    style: TextStyle(color: Colors.black)),
-                trailing:
-                    const Icon(Icons.arrow_forward_ios, color: Colors.grey),
-                onTap: () {
-                  _logout(context); // Call the logout function when pressed
-                },
-              ),
-              ListTile(
-                title: const Text('Terms of Service',
-                    style: TextStyle(color: Colors.black)),
                 trailing:
                     const Icon(Icons.arrow_forward_ios, color: Colors.grey),
                 onTap: () {

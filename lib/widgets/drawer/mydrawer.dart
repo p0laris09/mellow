@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
-import 'package:mellow/screens/SettingsScreen/settings_screen.dart';
+import 'package:mellow/screens/SettingsScreen/settings_drawer.dart';
 
 class MyDrawer extends StatelessWidget {
   const MyDrawer({super.key});
@@ -133,7 +133,7 @@ class MyDrawer extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const SettingsPage(),
+                      builder: (context) => const SettingsDrawer(),
                     ),
                   );
                 },

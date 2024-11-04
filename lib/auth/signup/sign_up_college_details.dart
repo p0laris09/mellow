@@ -25,8 +25,8 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
       TextEditingController(text: "University of Makati");
   final TextEditingController _collegeController = TextEditingController();
   final TextEditingController _programController = TextEditingController();
+  final TextEditingController _sectionController = TextEditingController();
 
-  // For dropdown
   String? _selectedYear;
   final List<String> _years = [
     '1st Year',
@@ -34,19 +34,20 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
     '3rd Year',
     '4th Year',
     '5th Year'
-  ]; // List of years
+  ];
 
   String? _errorMessage;
 
   void _validateAndNavigate() {
     setState(() {
-      _errorMessage = null; // Clear previous error message
+      _errorMessage = null;
     });
 
     // Check if fields are empty
     if (_collegeController.text.isEmpty ||
         _programController.text.isEmpty ||
-        _selectedYear == null) {
+        _selectedYear == null ||
+        _sectionController.text.isEmpty) {
       setState(() {
         _errorMessage = 'Please fill in all required fields!';
       });
@@ -66,6 +67,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
           college: _collegeController.text,
           program: _programController.text,
           year: _selectedYear!,
+          section: _sectionController.text, // Pass section
         ),
       ),
     );
@@ -232,7 +234,29 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                             _selectedYear = newValue;
                           });
                         },
-                        menuMaxHeight: 300, // Adjust the height as needed
+                        menuMaxHeight: 300,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+
+                    // Section TextField
+                    SizedBox(
+                      width: 300,
+                      child: TextField(
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[a-zA-Z0-9\s]')),
+                          LengthLimitingTextInputFormatter(50),
+                        ],
+                        controller: _sectionController,
+                        decoration: const InputDecoration(
+                          labelText: "Section",
+                          labelStyle: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          border: UnderlineInputBorder(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 50),
