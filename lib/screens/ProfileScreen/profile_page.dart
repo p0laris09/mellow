@@ -43,6 +43,8 @@ class _ProfilePageState extends State<ProfilePage> {
             .get();
 
         if (userDoc.exists) {
+          // Update user details and fetch profile image
+          await profileImageProvider.fetchProfileImage(user);
           setState(() {
             userName =
                 '${userDoc['firstName']} ${userDoc['lastName']}'.toUpperCase();
@@ -50,64 +52,55 @@ class _ProfilePageState extends State<ProfilePage> {
             college = userDoc['college'];
             program = userDoc['program'];
             year = userDoc['year'];
-          });
-
-          // Fetch profile image
-          await profileImageProvider.fetchProfileImage(user);
-          setState(() {
             profileImageUrl =
                 profileImageProvider.profileImageUrl?.isNotEmpty == true
                     ? profileImageProvider.profileImageUrl!
                     : 'assets/img/default_profile.png';
           });
-
-          // Fetch tasks count
-          QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('tasks')
-              .get();
-          setState(() {
-            tasksCount = tasksSnapshot.size;
-          });
-
-          // Fetch accepted friends count from friend requests
-          // Query for accepted friends where current user is toUserId
-          QuerySnapshot friendsAsReceiverSnapshot = await FirebaseFirestore
-              .instance
-              .collection('friends_request')
-              .where('status', isEqualTo: 'accepted')
-              .where('toUserId', isEqualTo: userId)
-              .get();
-
-          // Query for accepted friends where current user is fromUserId
-          QuerySnapshot friendsAsSenderSnapshot = await FirebaseFirestore
-              .instance
-              .collection('friends_request')
-              .where('status', isEqualTo: 'accepted')
-              .where('fromUserId', isEqualTo: userId)
-              .get();
-
-          // Combine counts
-          setState(() {
-            friendsCount =
-                friendsAsReceiverSnapshot.size + friendsAsSenderSnapshot.size;
-          });
-
-          // Fetch space count if needed
-          QuerySnapshot spaceSnapshot = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('space')
-              .get();
-          setState(() {
-            spaceCount = spaceSnapshot.size;
-          });
         }
+
+        // Fetch tasks, friends, and space counts in parallel
+        final tasksFuture = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('tasks')
+            .get();
+        final friendsAsReceiverFuture = FirebaseFirestore.instance
+            .collection('friends_request')
+            .where('status', isEqualTo: 'accepted')
+            .where('toUserId', isEqualTo: userId)
+            .get();
+        final friendsAsSenderFuture = FirebaseFirestore.instance
+            .collection('friends_request')
+            .where('status', isEqualTo: 'accepted')
+            .where('fromUserId', isEqualTo: userId)
+            .get();
+        final spaceFuture = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('space')
+            .get();
+
+        // Await all futures and update counts in one `setState`
+        final results = await Future.wait([
+          tasksFuture,
+          friendsAsReceiverFuture,
+          friendsAsSenderFuture,
+          spaceFuture,
+        ]);
+
+        setState(() {
+          tasksCount = results[0].size;
+          friendsCount = results[1].size + results[2].size;
+          spaceCount = results[3].size;
+          isLoading = false;
+        });
       } catch (e) {
         print('Error loading user profile: $e');
-      } finally {
         setState(() {
+          tasksCount = 0;
+          friendsCount = 0;
+          spaceCount = 0;
           isLoading = false;
         });
       }
@@ -125,7 +118,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Profile image and statistics row
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -139,7 +131,6 @@ class _ProfilePageState extends State<ProfilePage> {
                               : null,
                         ),
                         const SizedBox(width: 20),
-                        // Statistics Row
                         Expanded(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -154,7 +145,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // User name and academic details below profile image
                     Padding(
                       padding: const EdgeInsets.only(left: 10.0),
                       child: Column(
@@ -169,38 +159,21 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'College: $college',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                            ),
-                          ),
+                          Text('College: $college',
+                              style: const TextStyle(color: Colors.black87)),
                           const SizedBox(height: 4),
-                          Text(
-                            'Program: $program',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                            ),
-                          ),
+                          Text('Program: $program',
+                              style: const TextStyle(color: Colors.black87)),
                           const SizedBox(height: 4),
-                          Text(
-                            'Year: $year',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                            ),
-                          ),
+                          Text('Year: $year',
+                              style: const TextStyle(color: Colors.black87)),
                           const SizedBox(height: 4),
-                          Text(
-                            'Section: $userSection',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                            ),
-                          ),
+                          Text('Section: $userSection',
+                              style: const TextStyle(color: Colors.black87)),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Additional content area
                     SizedBox(
                       height: 610,
                       child: Container(
@@ -209,7 +182,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         decoration: const BoxDecoration(
                           color: Colors.white,
                         ),
-                        // Additional content can be added here
                       ),
                     ),
                   ],
@@ -220,9 +192,17 @@ class _ProfilePageState extends State<ProfilePage> {
         onPressed: () {
           Navigator.pushNamed(context, '/search_friends');
         },
-        label: const Text('Add Friends'),
-        icon: const Icon(Icons.person_add),
-        backgroundColor: Colors.blue,
+        label: const Text(
+          'Add Friends',
+          style: TextStyle(
+            color: Colors.white,
+          ),
+        ),
+        icon: const Icon(
+          Icons.person_add,
+          color: Colors.white,
+        ),
+        backgroundColor: const Color(0xFF2C3C3C),
       ),
     );
   }

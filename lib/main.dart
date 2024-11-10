@@ -9,6 +9,7 @@ import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/provider/BannerImageProvider/banner_image_provider.dart';
 import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
+import 'package:mellow/screens/MessageScreen/message_screen.dart';
 import 'package:mellow/screens/NotificationScreen/notification_screen.dart';
 import 'package:mellow/screens/ProfileScreen/SearchFriendsScreen/search_friends.dart';
 import 'package:mellow/screens/ProfileScreen/profile_page.dart';
@@ -134,6 +135,7 @@ class MellowApp extends StatelessWidget {
         '/change_email': (context) => const EmailUpdatePage(),
         '/change_password': (context) => const ChangePassword(),
         '/search_friends': (context) => const SearchFriends(),
+        '/messages': (context) => const MessageScreen(),
       },
     );
   }

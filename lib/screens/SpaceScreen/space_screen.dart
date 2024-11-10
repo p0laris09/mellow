@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:mellow/screens/SpaceScreen/CreateSpaceScreen/create_space.dart';
 import 'package:mellow/widgets/cards/SpaceCards/recently_space_card.dart';
 import 'package:mellow/widgets/cards/SpaceCards/space_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class SpaceScreen extends StatefulWidget {
   const SpaceScreen({super.key});
@@ -12,90 +14,87 @@ class SpaceScreen extends StatefulWidget {
 }
 
 class _SpaceScreenState extends State<SpaceScreen> {
-  List<Map<String, dynamic>> recentSpaces = [];
+  List<Map<String, dynamic>> recentSpaces = []; // Define recentSpaces here
 
-  Future<void> createSpace(
-      String spaceName, String description, List<String> memberUids) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final leaderUid = user?.uid ?? '';
-
-    if (leaderUid.isEmpty) {
-      throw Exception("User is not logged in");
-    }
-
-    final spaceData = {
-      'spaceName': spaceName,
-      'description': description,
-      'dateCreated': FieldValue.serverTimestamp(),
-      'leader': leaderUid,
-      'members': [leaderUid, ...memberUids],
-    };
-
-    await FirebaseFirestore.instance.collection('spaces').add(spaceData);
-
-    setState(() {
-      recentSpaces.insert(
-        0,
-        {
-          'spaceName': spaceName,
-          'description': description,
-          'date': DateTime.now().toString(),
-          'memberImages': memberUids,
-        },
-      );
-      if (recentSpaces.length > 5) recentSpaces.removeLast();
-    });
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecentSpaces(); // Fetch recent spaces when the widget is initialized
   }
 
-  // Function to get friends and suggestions
-  Future<Map<String, List<Map<String, String>>>>
-      _getFriendsAndSuggestions() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final uid = user?.uid;
-    Map<String, List<Map<String, String>>> members = {
-      'friends': [],
-      'peers': []
-    };
+  Future<void> _fetchRecentSpaces() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final uid = user?.uid;
+      if (uid == null) return;
 
-    if (uid == null) return members;
+      // Fetch spaces where the user is either an admin or a member
+      final spacesQuery = await FirebaseFirestore.instance
+          .collection('spaces')
+          .where('members', arrayContains: uid)
+          .get();
 
-    final friendsQuery = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('friends')
-        .get();
+      final spacesWithAdminQuery = await FirebaseFirestore.instance
+          .collection('spaces')
+          .where('admin', isEqualTo: uid)
+          .get();
 
-    if (friendsQuery.docs.isNotEmpty) {
-      members['friends'] = friendsQuery.docs.map((doc) {
-        String fullName =
-            "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}";
-        return {'uid': doc.id, 'name': fullName};
-      }).toList();
-    }
+      // Combine both queries
+      final allSpaces = [
+        ...spacesQuery.docs.map((doc) => doc.data()),
+        ...spacesWithAdminQuery.docs.map((doc) => doc.data())
+      ];
 
-    if (members['friends']!.isEmpty) {
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final userData = userDoc.data();
+      // Sort spaces by `lastOpened` timestamp, in descending order
+      allSpaces.sort((a, b) {
+        final lastOpenedA = a['lastOpened'] != null &&
+                a['lastOpened'] is Timestamp
+            ? (a['lastOpened'] as Timestamp).toDate()
+            : DateTime
+                .now(); // Default to current date if null or not a valid Timestamp
+        final lastOpenedB = b['lastOpened'] != null &&
+                b['lastOpened'] is Timestamp
+            ? (b['lastOpened'] as Timestamp).toDate()
+            : DateTime
+                .now(); // Default to current date if null or not a valid Timestamp
 
-      if (userData != null) {
-        final peerQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('college', isEqualTo: userData['college'])
-            .where('year', isEqualTo: userData['year'])
-            .where('program', isEqualTo: userData['program'])
-            .where('section', isEqualTo: userData['section'])
-            .get();
+        return lastOpenedB.compareTo(lastOpenedA);
+      });
 
-        members['peers'] = peerQuery.docs.map((doc) {
-          String fullName =
-              "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}";
-          return {'uid': doc.id, 'name': fullName};
-        }).toList();
+      // Get the most recent space
+      final mostRecentSpace = allSpaces.isNotEmpty ? allSpaces.first : null;
+
+      // Format the date of the most recent space
+      String formattedDate = 'No recent spaces';
+      if (mostRecentSpace != null) {
+        DateTime? createdAt = mostRecentSpace['dateCreated'] != null &&
+                mostRecentSpace['dateCreated'] is Timestamp
+            ? (mostRecentSpace['dateCreated'] as Timestamp).toDate()
+            : null;
+
+        formattedDate = createdAt != null
+            ? DateFormat('MMM d, yyyy').format(createdAt)
+            : 'No date available';
       }
-    }
 
-    return members;
+      // Update the recentSpaces state with the most recent space
+      setState(() {
+        recentSpaces = mostRecentSpace != null
+            ? [
+                {
+                  'spaceName': mostRecentSpace['name'] ?? 'Unnamed Space',
+                  'admin': mostRecentSpace['admin'] ?? 'Unknown Admin',
+                  'description': mostRecentSpace['description'] ??
+                      'No description available',
+                  'date': formattedDate,
+                }
+              ]
+            : []; // Empty list if no recent space
+      });
+    } catch (e) {
+      // Handle errors if necessary
+      print('Error fetching recent spaces: $e');
+    }
   }
 
   @override
@@ -129,8 +128,11 @@ class _SpaceScreenState extends State<SpaceScreen> {
             const SizedBox(height: 24),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream:
-                    FirebaseFirestore.instance.collection('spaces').snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('spaces')
+                    .where('members',
+                        arrayContains: FirebaseAuth.instance.currentUser?.uid)
+                    .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -141,18 +143,26 @@ class _SpaceScreenState extends State<SpaceScreen> {
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(child: Text('No spaces available.'));
                   }
-
                   return ListView(
                     children: snapshot.data!.docs.map((doc) {
                       Map<String, dynamic> data =
                           doc.data() as Map<String, dynamic>;
-                      return SpaceCard(
-                        spaceName: data['spaceName'] ?? 'Unnamed Space',
-                        description: data['description'] ?? 'No description',
-                        date: (data['dateCreated'] as Timestamp)
-                            .toDate()
-                            .toString(),
-                        memberIcons: List<String>.from(data['members'] ?? []),
+
+                      // Check if 'createdAt' exists and is a valid Timestamp before casting
+                      Timestamp? createdAt = data['createdAt'] as Timestamp?;
+                      DateTime date = createdAt?.toDate() ??
+                          DateTime.now(); // Default to current date if null
+
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                            bottom: 8.0), // Adding space around each card
+                        child: SpaceCard(
+                          spaceId: doc.id, // Pass the spaceId (document ID)
+                          spaceName: data['name'] ?? 'Unnamed Space',
+                          description: data['description'] ?? 'No description',
+                          date: DateFormat('MMM d, yyyy')
+                              .format(date), // Pass formatted date
+                        ),
                       );
                     }).toList(),
                   );
@@ -164,7 +174,11 @@ class _SpaceScreenState extends State<SpaceScreen> {
               alignment: Alignment.centerRight,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  _showSpaceCreationDialog(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const CreateSpacePage()),
+                  );
                 },
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text(
@@ -188,196 +202,32 @@ class _SpaceScreenState extends State<SpaceScreen> {
   }
 
   Widget _buildRecentlyOpenedSection() {
+    // If there are no recent spaces, show a message
     if (recentSpaces.isEmpty) {
       return const Center(child: Text('No space was recently opened.'));
     }
 
     return SizedBox(
       height: 180,
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        children: recentSpaces.map((spaceData) {
-          return RecentSpaceCard(
-            spaceName: spaceData['spaceName'],
-            description: spaceData['description'],
-            date: spaceData['date'],
-            memberImages: spaceData['memberImages'],
+        itemCount: recentSpaces.length,
+        itemBuilder: (context, index) {
+          final spaceData = recentSpaces[index];
+
+          return Padding(
+            padding:
+                const EdgeInsets.only(right: 8.0), // Add space between cards
+            child: RecentSpaceCard(
+              spaceId: spaceData['spaceId'], // Pass the spaceId here
+              spaceName: spaceData['spaceName'] ?? 'Unnamed Space',
+              description:
+                  spaceData['description'] ?? 'No description available',
+              date: spaceData['date'] ?? 'No date available',
+            ),
           );
-        }).toList(),
+        },
       ),
-    );
-  }
-
-  void _showSpaceCreationDialog(BuildContext context,
-      [List<String> selectedMemberUids = const []]) {
-    String spaceName = '';
-    String spaceDetails = '';
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Create New Space'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    decoration: const InputDecoration(labelText: 'Space Name'),
-                    onChanged: (value) {
-                      spaceName = value;
-                    },
-                  ),
-                  TextField(
-                    decoration: const InputDecoration(labelText: 'Description'),
-                    onChanged: (value) {
-                      spaceDetails = value;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Text('Members'),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle, color: Colors.teal),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _showMemberSelectionDialog(
-                              context, selectedMemberUids);
-                        },
-                      ),
-                    ],
-                  ),
-                  Wrap(
-                    spacing: 8.0,
-                    children: selectedMemberUids.map((uid) {
-                      return Chip(label: Text(uid));
-                    }).toList(),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    createSpace(spaceName, spaceDetails, selectedMemberUids);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Create Space'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // In the _showMemberSelectionDialog method
-  void _showMemberSelectionDialog(
-      BuildContext context, List<String> initialSelectedUids) async {
-    final members = await _getFriendsAndSuggestions();
-    Set<String> selectedUids = {...initialSelectedUids};
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Select Members'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (members['friends']!
-                      .isNotEmpty) // Use ! to assert it's not null
-                    Column(
-                      children: [
-                        const Text('Friends'),
-                        Wrap(
-                          spacing: 8.0,
-                          children: members['friends']!.map((friend) {
-                            // Use ! to assert it's not null
-                            bool isSelected =
-                                selectedUids.contains(friend['uid']);
-                            return ChoiceChip(
-                              label: Text(friend['name']!),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    selectedUids.add(friend['uid']!);
-                                  } else {
-                                    selectedUids.remove(friend['uid']!);
-                                  }
-                                });
-                              },
-                              selectedColor: Colors.green.withOpacity(0.7),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    )
-                  else
-                    const Text('No available Friends'),
-                  const SizedBox(height: 16),
-                  if (members['peers']!
-                      .isNotEmpty) // Use ! to assert it's not null
-                    Column(
-                      children: [
-                        const Text('Suggested Peers'),
-                        Wrap(
-                          spacing: 8.0,
-                          children: members['peers']!.map((peer) {
-                            // Use ! to assert it's not null
-                            bool isSelected =
-                                selectedUids.contains(peer['uid']);
-                            return ChoiceChip(
-                              label: Text(peer['name']!),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    selectedUids.add(peer['uid']!);
-                                  } else {
-                                    selectedUids.remove(peer['uid']!);
-                                  }
-                                });
-                              },
-                              selectedColor: Colors.blue.withOpacity(0.7),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _showSpaceCreationDialog(context, initialSelectedUids);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _showSpaceCreationDialog(context, selectedUids.toList());
-                  },
-                  child: const Text('Select'),
-                ),
-              ],
-            );
-          },
-        );
-      },
     );
   }
 }

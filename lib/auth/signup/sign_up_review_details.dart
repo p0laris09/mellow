@@ -8,6 +8,7 @@ class AccountReviewScreen extends StatefulWidget {
   final String middleName;
   final String lastName;
   final String birthday;
+  final String gender;
   final String university;
   final String college;
   final String program;
@@ -23,6 +24,7 @@ class AccountReviewScreen extends StatefulWidget {
     required this.middleName,
     required this.lastName,
     required this.birthday,
+    required this.gender,
     required this.university,
     required this.college,
     required this.program,
@@ -54,21 +56,38 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
 
       // Save additional details to Firestore
       if (userCredential.user != null) {
-        await firestore.collection('users').doc(userCredential.user!.uid).set({
+        String uid = userCredential.user!.uid;
+
+        // Add user details to the 'users' collection
+        await firestore.collection('users').doc(uid).set({
           'firstName': widget.firstName,
           'middleName': widget.middleName,
           'lastName': widget.lastName,
           'birthday': widget.birthday,
+          'gender': widget.gender,
           'university': widget.university,
           'college': widget.college,
           'program': widget.program,
           'year': widget.year,
           'phoneNumber': widget.phoneNumber,
           'section': widget.section,
-          // Do not store password here
+          'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // Navigate to homepage after successful sign-up
+        // Create the user's friends document with empty subcollections
+        await firestore.collection('friends').doc(uid).set({});
+        await firestore
+            .collection('friends')
+            .doc(uid)
+            .collection('friends')
+            .doc(); // Create empty 'friends' subcollection
+        await firestore
+            .collection('friends')
+            .doc(uid)
+            .collection('requests')
+            .doc(); // Create empty 'requests' subcollection
+
+        // Navigate to the dashboard
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     } on FirebaseAuthException catch (e) {
@@ -148,7 +167,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
             ),
             const SizedBox(height: 30),
             SizedBox(
-              height: 730,
+              height: 770,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -176,6 +195,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                     _buildReviewRow("Middle Name:", widget.middleName),
                     _buildReviewRow("Last Name:", widget.lastName),
                     _buildReviewRow("Birthday:", widget.birthday),
+                    _buildReviewRow("Gender", widget.gender),
                     const SizedBox(height: 20),
                     const Text(
                       'School Information',

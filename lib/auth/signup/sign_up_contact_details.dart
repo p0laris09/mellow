@@ -7,6 +7,7 @@ class SignUpContactDetails extends StatefulWidget {
   final String middleName;
   final String lastName;
   final String birthday;
+  final String gender;
   final String university;
   final String college;
   final String program;
@@ -19,6 +20,7 @@ class SignUpContactDetails extends StatefulWidget {
     required this.middleName,
     required this.lastName,
     required this.birthday,
+    required this.gender,
     required this.university,
     required this.college,
     required this.program,
@@ -108,6 +110,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
           middleName: widget.middleName,
           lastName: widget.lastName,
           birthday: widget.birthday,
+          gender: widget.gender,
           university: widget.university,
           college: widget.college,
           program: widget.program,

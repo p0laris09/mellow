@@ -103,34 +103,54 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     }
   }
 
-  Future<void> _fetchTasks() async {
+  Future<void> _updateOverdueTasks() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
     try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
+      // Check and update overdue tasks
+      QuerySnapshot taskSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: currentUser.uid)
+          .where('status',
+              isEqualTo:
+                  'ongoing') // Only check ongoing tasks for overdue status
+          .get();
 
-      if (currentUser == null) {
-        print("User is not authenticated");
-        return;
+      DateTime now = DateTime.now();
+      for (var task in taskSnapshot.docs) {
+        DateTime dueDate = (task['endTime'] as Timestamp).toDate();
+        if (dueDate.isBefore(now)) {
+          // Update task to overdue if past due date
+          await FirebaseFirestore.instance
+              .collection('tasks')
+              .doc(task.id)
+              .update({'status': 'overdue'});
+        }
       }
+    } catch (e) {
+      print("Error updating overdue tasks: $e");
+    }
+  }
 
+  Future<void> _fetchTasks() async {
+    await _updateOverdueTasks(); // First update overdue tasks
+
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      // Fetch tasks including those marked as overdue
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: currentUser.uid)
-          .where('status', whereIn: ['pending', 'ongoing', 'overdue']).get();
+          .where('status', whereIn: ['pending', 'ongoing', 'overdue'])
+          .orderBy('endTime')
+          .get();
 
-      List<DocumentSnapshot> tasks = querySnapshot.docs;
-
-      tasks.sort((a, b) {
-        DateTime dueDateA =
-            (a['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
-        DateTime dueDateB =
-            (b['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
-        return dueDateA.compareTo(dueDateB);
-      });
-
-      if (mounted && tasks.length != _tasks.length) {
-        // Only update if the number of tasks has changed
+      if (mounted) {
         setState(() {
-          _tasks = tasks;
+          _tasks = querySnapshot.docs;
         });
       }
     } catch (e) {
@@ -140,10 +160,19 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
 
   Future<void> _fetchRecentSpaces() async {
     try {
+      // Get the current user's UID
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Fetch spaces where the user is either a member or an admin
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('spaces')
-          .orderBy('createdAt', descending: true)
-          .limit(5)
+          .where('members',
+              arrayContains: user.uid) // User is a member of the space
+          .where('admin', isEqualTo: user.uid) // User is the admin of the space
+          .orderBy('lastOpened',
+              descending: true) // Sort by lastOpened in descending order
+          .limit(2) // Limit to the 2 most recent spaces
           .get();
 
       if (mounted) {
@@ -323,21 +352,20 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       final space = _recentSpaces[index];
                       final spaceName = space['name'] ?? 'Unnamed Space';
                       final description = space['description'] ?? '';
-                      final createdAt =
-                          (space['createdAt'] as Timestamp?)?.toDate();
-                      final date = createdAt != null
-                          ? DateFormat('MMM d, yyyy').format(createdAt)
+                      final lastOpened = space['lastOpened'] != null
+                          ? (space['lastOpened'] as Timestamp).toDate()
+                          : null;
+                      final date = lastOpened != null
+                          ? DateFormat('MMM d, yyyy').format(lastOpened)
                           : 'Unknown Date';
-                      final memberImages =
-                          List<String>.from(space['memberImages'] ?? []);
 
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: RecentSpaceCard(
+                          spaceId: space.id, // Pass the space ID here
                           spaceName: spaceName,
                           description: description,
                           date: date,
-                          memberImages: memberImages,
                         ),
                       );
                     },
@@ -373,15 +401,13 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                 .where('userId', isEqualTo: uid)
                 .where('status', whereIn: ['pending', 'ongoing', 'overdue'])
                 .orderBy('endTime', descending: false)
-                .snapshots()
-                .distinct(), // Avoid processing duplicate snapshots
+                .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Text("Error loading tasks: ${snapshot.error}");
               }
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                // Prevent unnecessary state changes here
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
@@ -392,6 +418,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               }
 
               var taskDocs = snapshot.data!.docs;
+              DateTime now = DateTime.now();
 
               return ListView.builder(
                 physics: const NeverScrollableScrollPhysics(),
@@ -404,7 +431,12 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       (task['startTime'] as Timestamp).toDate();
                   DateTime dueDate = (task['endTime'] as Timestamp).toDate();
                   String name = task['taskName'] ?? 'Unnamed Task';
-                  String taskStatus = task['status'] ?? 'Pending';
+                  String taskStatus = task['status'] ?? 'pending';
+
+                  // Dynamically set status to overdue if due date is past and status is not 'finished'
+                  if (dueDate.isBefore(now) && taskStatus != 'Finished') {
+                    taskStatus = 'overdue';
+                  }
 
                   String formattedStartTime =
                       DateFormat('yyyy-MM-dd hh:mm a').format(startTime);

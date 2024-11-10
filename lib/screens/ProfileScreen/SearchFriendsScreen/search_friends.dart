@@ -94,49 +94,76 @@ class _SearchFriendsState extends State<SearchFriends> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    final docOutgoing = await FirebaseFirestore.instance
-        .collection('friend_requests')
-        .doc('${currentUser.uid}-$selectedUserId')
-        .get();
+    try {
+      final outgoingRequestDoc = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(currentUser.uid)
+          .collection('friends')
+          .doc(selectedUserId)
+          .get();
 
-    final docIncoming = await FirebaseFirestore.instance
-        .collection('friend_requests')
-        .doc('${selectedUserId}-${currentUser.uid}')
-        .get();
+      final incomingRequestDoc = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(selectedUserId)
+          .collection('friends')
+          .doc(currentUser.uid)
+          .get();
 
-    String friendRequestStatus;
-    String fromUserId = ''; // Initialize with an empty string
-    String toUserId = ''; // Initialize with an empty string
+      // Check for friend or request status
+      String friendRequestStatus;
+      String fromUserId = '';
+      String toUserId = '';
 
-    if (docOutgoing.exists) {
-      friendRequestStatus = docOutgoing['status'];
-      fromUserId = docOutgoing['fromUserId'];
-      toUserId = docOutgoing['toUserId'];
-    } else if (docIncoming.exists) {
-      friendRequestStatus = docIncoming['status'];
-      fromUserId = docIncoming['fromUserId'];
-      toUserId = docIncoming['toUserId'];
-    } else {
-      friendRequestStatus = 'none';
+      if (outgoingRequestDoc.exists) {
+        friendRequestStatus = outgoingRequestDoc['status'];
+        fromUserId = outgoingRequestDoc['fromUserId'];
+        toUserId = outgoingRequestDoc['toUserId'];
+      } else if (incomingRequestDoc.exists) {
+        friendRequestStatus = incomingRequestDoc['status'];
+        fromUserId = incomingRequestDoc['fromUserId'];
+        toUserId = incomingRequestDoc['toUserId'];
+      } else {
+        friendRequestStatus = 'none';
+      }
+
+      Widget targetPage;
+
+      if (friendRequestStatus == 'accepted') {
+        targetPage = ViewProfile(userId: selectedUserId);
+      } else if (friendRequestStatus == 'pending' &&
+          fromUserId == currentUser.uid) {
+        targetPage = AddFriend(userId: selectedUserId);
+      } else if (friendRequestStatus == 'pending' &&
+          toUserId == currentUser.uid) {
+        targetPage = FriendRequest(userId: selectedUserId);
+      } else {
+        targetPage = AddFriend(userId: selectedUserId);
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => targetPage),
+      );
+    } catch (e) {
+      if (e.toString().contains('unavailable')) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text('Network Issue'),
+            content: Text(
+                'The service is currently unavailable. Please try again later.'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        print('Error: $e');
+      }
     }
-
-    Widget targetPage;
-    if (friendRequestStatus == 'accepted') {
-      targetPage = ViewProfile(userId: selectedUserId);
-    } else if (friendRequestStatus == 'pending' &&
-        fromUserId == currentUser.uid) {
-      targetPage = AddFriend(userId: selectedUserId);
-    } else if (friendRequestStatus == 'pending' &&
-        toUserId == currentUser.uid) {
-      targetPage = FriendRequest(userId: selectedUserId);
-    } else {
-      targetPage = AddFriend(userId: selectedUserId);
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => targetPage),
-    );
   }
 
   @override
