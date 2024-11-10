@@ -20,6 +20,9 @@ class _AddFriendState extends State<AddFriend> {
   String college = 'Loading...';
   String program = 'Loading...';
   String year = 'Loading...';
+  String tasksCount = '0';
+  String spaceCount = '0';
+  String friendsCount = '0';
   bool isLoading = true;
   String errorMessage = '';
 
@@ -35,6 +38,7 @@ class _AddFriendState extends State<AddFriend> {
       currentUserId = currentUser.uid;
       await _loadUserProfile();
       await _checkFriendRequestStatus();
+      await _loadCounts();
     }
   }
 
@@ -64,26 +68,92 @@ class _AddFriendState extends State<AddFriend> {
   }
 
   Future<void> _checkFriendRequestStatus() async {
-    DocumentSnapshot doc = await FirebaseFirestore.instance
-        .collection('friend_requests')
-        .doc('$currentUserId-${widget.userId}')
+    // Check if there is an existing friend request
+    DocumentSnapshot requestDoc = await FirebaseFirestore.instance
+        .collection('friends_db')
+        .doc(currentUserId)
+        .collection('requests')
+        .doc(widget.userId)
         .get();
 
-    if (doc.exists) {
+    if (requestDoc.exists) {
       setState(() {
-        requestStatus = doc['status'] ?? 'none';
+        requestStatus = requestDoc['status'] ?? 'none';
+      });
+    } else {
+      // If no friend request, check if they are already friends
+      DocumentSnapshot friendDoc = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(currentUserId)
+          .collection('friends')
+          .doc(widget.userId)
+          .get();
+
+      if (friendDoc.exists) {
+        setState(() {
+          requestStatus = 'friends';
+        });
+      } else {
+        // If no friend or request document, set status as 'none'
+        setState(() {
+          requestStatus = 'none';
+        });
+      }
+    }
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      // Load task count
+      QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: widget.userId)
+          .get();
+      setState(() {
+        tasksCount =
+            tasksSnapshot.size > 0 ? tasksSnapshot.size.toString() : '0';
+      });
+
+      // Load collaboration space count
+      QuerySnapshot spacesSnapshot = await FirebaseFirestore.instance
+          .collection('spaces')
+          .where('members', arrayContains: widget.userId)
+          .get();
+      setState(() {
+        spaceCount =
+            spacesSnapshot.size > 0 ? spacesSnapshot.size.toString() : '0';
+      });
+
+      // Load friends count
+      QuerySnapshot friendsSnapshot = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(widget.userId)
+          .collection('friends')
+          .get();
+      setState(() {
+        friendsCount =
+            friendsSnapshot.size > 0 ? friendsSnapshot.size.toString() : '0';
+      });
+    } catch (e) {
+      print('Error loading counts: $e');
+      setState(() {
+        tasksCount = '0';
+        spaceCount = '0';
+        friendsCount = '0';
       });
     }
   }
 
   Future<void> _sendFriendRequest() async {
     await FirebaseFirestore.instance
-        .collection('friend_requests')
-        .doc('$currentUserId-${widget.userId}')
+        .collection('friends_db')
+        .doc(widget.userId)
+        .collection('requests')
+        .doc(currentUserId)
         .set({
       'fromUserId': currentUserId,
-      'toUserId': widget.userId,
       'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
     });
 
     setState(() {
@@ -96,8 +166,10 @@ class _AddFriendState extends State<AddFriend> {
 
   Future<void> _cancelFriendRequest() async {
     await FirebaseFirestore.instance
-        .collection('friend_requests')
-        .doc('$currentUserId-${widget.userId}')
+        .collection('friends_db')
+        .doc(widget.userId)
+        .collection('requests')
+        .doc(currentUserId)
         .delete();
 
     setState(() {
@@ -157,9 +229,9 @@ class _AddFriendState extends State<AddFriend> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatItem('671', 'Tasks'),
-                      _buildStatItem('10.6k', 'Space'),
-                      _buildStatItem('562', 'Friends'),
+                      _buildStatItem(tasksCount, 'Tasks'),
+                      _buildStatItem(spaceCount, 'Spaces'),
+                      _buildStatItem(friendsCount, 'Friends'),
                     ],
                   ),
                 ),

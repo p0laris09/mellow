@@ -53,9 +53,17 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
         if (selectedIndex != 1) // Hide the icon when on TaskManagementScreen
           IconButton(
             onPressed: () {
-              Navigator.pushNamed(context, '/taskCreation');
+              if (selectedIndex == 4) {
+                // Navigate to messages screen when selectedIndex is 4
+                Navigator.pushNamed(context, '/messages');
+              } else {
+                // Navigate to task creation screen for other cases
+                Navigator.pushNamed(context, '/taskCreation');
+              }
             },
-            icon: const Icon(Icons.add_box),
+            icon: Icon(
+              selectedIndex == 4 ? Icons.message : Icons.add_box,
+            ),
           ),
         IconButton(
           onPressed: () {

@@ -38,27 +38,29 @@ class TaskManager {
     }).toList();
   }
 
-  // Suggest best times based on existing tasks
+  // Calculate task weight based on priority, urgency, etc.
+  double calculateTaskWeight(Task task) {
+    return (task.priority * 0.3) +
+        (task.urgency * 0.3) +
+        (task.importance * 0.2) +
+        (task.complexity * 0.2);
+  }
+
   // Suggest best times based on existing tasks
   List<DateTime> suggestBestTimes(Task newTask) {
     List<DateTime> bestTimes = [];
     Duration taskDuration = newTask.endTime.difference(newTask.startTime);
 
-    // Define the number of days to check for available time slots
     const int daysToCheck = 7; // Check for the next 7 days
     DateTime now = DateTime.now();
 
-    // Loop through the next 'daysToCheck' days
     for (int i = 0; i < daysToCheck; i++) {
       DateTime checkDate = now.add(Duration(days: i));
-
-      // Define time range for the day (from 8 AM to 8 PM, for example)
       DateTime startOfDay =
           DateTime(checkDate.year, checkDate.month, checkDate.day, 8, 0);
       DateTime endOfDay =
           DateTime(checkDate.year, checkDate.month, checkDate.day, 20, 0);
 
-      // Check for conflicts within the defined day range
       for (DateTime time = startOfDay;
           time.isBefore(endOfDay);
           time = time.add(Duration(minutes: 30))) {
@@ -68,10 +70,11 @@ class TaskManager {
         // Check if proposed time conflicts with existing tasks and is in the future
         bool conflict = tasks.any((task) {
           return (proposedStart.isBefore(task.endTime) &&
-              proposedEnd.isAfter(task.startTime));
+              proposedEnd.isAfter(task.startTime) &&
+              task !=
+                  newTask); // Ensure the task itself is not considered as a conflict
         });
 
-        // Ensure the proposed time is in the future
         if (!conflict && proposedStart.isAfter(now)) {
           bestTimes.add(proposedStart);
         }
@@ -81,37 +84,34 @@ class TaskManager {
     return bestTimes.take(2).toList(); // Return top 2 best times
   }
 
-  // Add task with conflict resolution
-  Future<void> addTaskWithConflictResolution(Task newTask, BuildContext context,
-      String? userId, Function(Task) onTaskResolved) async {
-    // Check for conflicts with existing tasks
-    bool conflictDetected = tasks.any((task) {
-      return (newTask.startTime.isBefore(task.endTime) &&
-          newTask.endTime.isAfter(task.startTime));
-    });
+  // Add task with conflict resolution, considering weight
+  Future<void> addTaskWithConflictResolution(
+    Task newTask,
+    BuildContext context,
+    String? userId,
+    Function(Task) onTaskResolved,
+    double weightLimit, // Add weightLimit as a parameter
+    Map<String, double> criteriaWeights, // Add criteriaWeights as a parameter
+  ) async {
+    newTask.updateWeight(criteriaWeights); // Update weight for the task
 
-    print('Conflict detected: $conflictDetected'); // Debugging line
+    double totalWeight = 0.0;
+    for (var task in tasks) {
+      if (newTask.overlapsWith(task)) {
+        totalWeight += task.weight; // Accumulate overlapping task weights
+      }
+    }
 
-    if (conflictDetected) {
-      // Show conflict dialog
+    if (totalWeight + newTask.weight > weightLimit) {
       await showConflictDialog(newTask, context, onTaskResolved);
     } else {
-      // No conflict, proceed to resolve task directly
       onTaskResolved(newTask);
     }
   }
 
-  // Show conflict dialog (already implemented)
   Future<void> showConflictDialog(Task conflictingTask, BuildContext context,
       Function(Task) onTaskResolved) async {
     List<DateTime> bestTimes = suggestBestTimes(conflictingTask);
-
-    if (bestTimes.isEmpty) {
-      print('No available times found.');
-      return;
-    }
-
-    // Save the duration before updating startTime
     final duration =
         conflictingTask.endTime.difference(conflictingTask.startTime);
 
@@ -124,49 +124,89 @@ class TaskManager {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                  'The task "${conflictingTask.taskName}" conflicts with another task.'),
-              Text(
-                  'Suggested Best Time: ${DateFormat('yyyy-MM-dd HH:mm').format(bestTimes.first)}'),
-              Text(
-                  'Second Best Time: ${bestTimes.length > 1 ? DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[1]) : "None"}'),
+                  'The task "${conflictingTask.taskName}" conflicts with another task and can result to overdue tasks.'),
+              const SizedBox(height: 16),
+              if (bestTimes.isNotEmpty)
+                _buildTimeCard(
+                  context: context,
+                  time: bestTimes[0],
+                  label: "Suggested Best Time",
+                  onSelect: () {
+                    conflictingTask.startTime = bestTimes[0];
+                    conflictingTask.endTime = bestTimes[0].add(duration);
+                    onTaskResolved(conflictingTask);
+                    Navigator.pop(context);
+                  },
+                ),
+              if (bestTimes.length > 1)
+                _buildTimeCard(
+                  context: context,
+                  time: bestTimes[1],
+                  label: "Second Best Time",
+                  onSelect: () {
+                    conflictingTask.startTime = bestTimes[1];
+                    conflictingTask.endTime = bestTimes[1].add(duration);
+                    onTaskResolved(conflictingTask);
+                    Navigator.pop(context);
+                  },
+                ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () {
-                // Choose Best Time
-                conflictingTask.startTime = bestTimes.first;
-                conflictingTask.endTime =
-                    conflictingTask.startTime.add(duration);
-                onTaskResolved(
-                    conflictingTask); // Notify that the task has been resolved
-                Navigator.pop(context); // Close dialog
-              },
-              child: const Text('Choose Best Time'),
-            ),
-            if (bestTimes.length > 1)
-              TextButton(
-                onPressed: () {
-                  // Choose Second Best Time
-                  conflictingTask.startTime = bestTimes[1];
-                  conflictingTask.endTime =
-                      conflictingTask.startTime.add(duration);
-                  onTaskResolved(
-                      conflictingTask); // Notify that the task has been resolved
-                  Navigator.pop(context); // Close dialog
-                },
-                child: const Text('Choose Second Best Time'),
-              ),
-            TextButton(
-              onPressed: () {
-                // Just close the dialog without any action
                 Navigator.pop(context);
               },
-              child: const Text('Change the time instead'),
+              child: const Text('Change Time Manually'),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTimeCard({
+    required BuildContext context,
+    required DateTime time,
+    required String label,
+    required VoidCallback onSelect,
+  }) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              DateFormat('yyyy-MM-dd HH:mm').format(time),
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: ElevatedButton(
+                onPressed: onSelect,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).primaryColor,
+                ),
+                child: const Text('Choose This Time'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -240,7 +280,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     String startTimeString = _startTimeController.text;
     String endTimeString = _endTimeController.text;
     String description = _descriptionController.text;
-
     String? userId = FirebaseAuth.instance.currentUser?.uid;
 
     DateTime? dueDate = dueDateString.isNotEmpty
@@ -270,40 +309,51 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         complexity: _complexity,
       );
 
+      // Initialize the TaskManager
       TaskManager taskManager = TaskManager();
-
-      // Load existing tasks before checking for conflicts
       await taskManager.loadTasksFromFirestore(userId);
 
-      // Debugging logs
-      print("Existing tasks loaded: ${taskManager.tasks.length}");
+      // Define weightLimit and criteriaWeights (these values should be defined based on your logic)
+      double weightLimit = 10.0; // Example weight limit
+      Map<String, double> criteriaWeights = {
+        'priority': _priority,
+        'urgency': _urgency,
+        'importance': _importance,
+        'complexity': _complexity,
+      };
 
-      // Add task with conflict resolution and userId
-      await taskManager.addTaskWithConflictResolution(newTask, context, userId,
-          (resolvedTask) async {
-        // Only save to Firestore if a task is resolved
-        await FirebaseFirestore.instance.collection('tasks').add({
-          'taskName': resolvedTask.taskName,
-          'dueDate': Timestamp.fromDate(dueDate),
-          'startTime':
-              Timestamp.fromDate(resolvedTask.startTime), // Updated time
-          'endTime': Timestamp.fromDate(resolvedTask.endTime), // Updated time
-          'description': description,
-          'priority': _priority,
-          'urgency': _urgency,
-          'importance': _importance,
-          'complexity': _complexity,
-          'createdAt': Timestamp.now(),
-          'userId': userId,
-          'status': 'pending', // Initial status
-        });
+      // Add conflict resolution before task creation
+      await taskManager.addTaskWithConflictResolution(
+        newTask,
+        context,
+        userId,
+        (resolvedTask) async {
+          // After resolving conflicts, add the task to Firestore
+          await FirebaseFirestore.instance.collection('tasks').add({
+            'taskName': resolvedTask.taskName,
+            'dueDate': Timestamp.fromDate(resolvedTask.dueDate),
+            'startTime': Timestamp.fromDate(resolvedTask.startTime),
+            'endTime': Timestamp.fromDate(resolvedTask.endTime),
+            'description': description,
+            'priority': _priority,
+            'urgency': _urgency,
+            'importance': _importance,
+            'complexity': _complexity,
+            'weight': resolvedTask.weight, // Store the task weight
+            'createdAt': Timestamp.now(),
+            'userId': userId,
+            'status': 'pending',
+          });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task created successfully!')),
-        );
-
-        Navigator.pop(context); // Close creation screen
-      });
+          // Show success message after task is created
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Task created successfully!')),
+          );
+          Navigator.pop(context); // Close the task creation screen
+        },
+        weightLimit, // Pass weightLimit
+        criteriaWeights, // Pass criteriaWeights
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields.')),
@@ -371,17 +421,23 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       controller: _dueDateController,
                       readOnly: true,
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: "Due Date",
-                        labelStyle: TextStyle(
+                        labelStyle: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
-                        border: UnderlineInputBorder(),
+                        border: const UnderlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today,
+                              color: Colors.white),
+                          onPressed: () {
+                            _selectDateTime(context, _dueDateController);
+                          },
+                        ),
+                        hintText: 'yyyy-mm-dd hh:mm',
+                        hintStyle: const TextStyle(color: Colors.white54),
                       ),
-                      onTap: () {
-                        _selectDateTime(context, _dueDateController);
-                      },
                     ),
                   ),
                 ],
@@ -412,17 +468,23 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                             controller: _startTimeController,
                             readOnly: true,
                             style: const TextStyle(color: Colors.black),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: "Start Time",
-                              labelStyle: TextStyle(
+                              labelStyle: const TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold,
                               ),
-                              border: UnderlineInputBorder(),
+                              border: const UnderlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.access_time,
+                                    color: Colors.black),
+                                onPressed: () {
+                                  _selectDateTime(
+                                      context, _startTimeController);
+                                },
+                              ),
+                              hintText: 'hh:mm',
                             ),
-                            onTap: () {
-                              _selectDateTime(context, _startTimeController);
-                            },
                           ),
                         ),
                         const SizedBox(width: 25),
@@ -432,17 +494,22 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                             controller: _endTimeController,
                             readOnly: true,
                             style: const TextStyle(color: Colors.black),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: "End Time",
-                              labelStyle: TextStyle(
+                              labelStyle: const TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold,
                               ),
-                              border: UnderlineInputBorder(),
+                              border: const UnderlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.access_time,
+                                    color: Colors.black),
+                                onPressed: () {
+                                  _selectDateTime(context, _endTimeController);
+                                },
+                              ),
+                              hintText: 'hh:mm',
                             ),
-                            onTap: () {
-                              _selectDateTime(context, _endTimeController);
-                            },
                           ),
                         ),
                       ],

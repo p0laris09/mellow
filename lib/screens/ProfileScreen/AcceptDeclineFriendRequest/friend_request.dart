@@ -21,6 +21,9 @@ class _FriendRequestState extends State<FriendRequest> {
   String college = 'Loading...';
   String program = 'Loading...';
   String year = 'Loading...';
+  int taskCount = 0;
+  int spaceCount = 0;
+  int friendCount = 0;
   bool isLoading = true;
   String errorMessage = '';
 
@@ -54,8 +57,9 @@ class _FriendRequestState extends State<FriendRequest> {
           program = data['program'] ?? 'N/A';
           year = data['year'] ?? 'N/A';
           profileImageUrl = data['profileImageUrl'] ?? '';
-          isLoading = false;
         });
+
+        await _loadCounts();
       } else {
         setState(() {
           errorMessage = 'User not found.';
@@ -70,64 +74,105 @@ class _FriendRequestState extends State<FriendRequest> {
     }
   }
 
+  Future<void> _loadCounts() async {
+    try {
+      QuerySnapshot taskSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: widget.userId)
+          .get();
+      taskCount = taskSnapshot.docs.length;
+
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        List<dynamic> friends = data['friends'] ?? [];
+        friendCount = friends.length;
+        spaceCount = data['spaces'] ?? 0;
+      } else {
+        taskCount = 0;
+        friendCount = 0;
+        spaceCount = 0;
+      }
+
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error loading data counts.';
+        isLoading = false;
+      });
+    }
+  }
+
   Future<void> _acceptFriendRequest() async {
     try {
-      // Update friend request status to 'accepted'
-      await FirebaseFirestore.instance
-          .collection('friend_requests')
-          .doc('${widget.userId}-$currentUserId')
-          .update({'status': 'accepted'});
-
-      // Add each other as friends
       await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
-          .update({
-        'friends': FieldValue.arrayUnion([widget.userId])
-      });
+          .collection('friends')
+          .doc('requests')
+          .collection(widget.userId)
+          .doc()
+          .update({'status': 'accepted'});
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .collection('friends')
+          .doc('friends')
+          .collection(widget.userId)
+          .doc()
+          .set({'friendId': widget.userId});
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
-          .update({
-        'friends': FieldValue.arrayUnion([currentUserId])
-      });
+          .collection('friends')
+          .doc('friends')
+          .collection(currentUserId)
+          .doc()
+          .set({'friendId': currentUserId});
 
-      print('Friend request accepted. Updated friends lists.');
-
-      // Send a notification
       await _sendNotification(
           widget.userId, 'Friend Request Accepted', 'You are now friends.');
 
-      // Navigate to ViewProfile
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-            builder: (context) => ViewProfile(userId: widget.userId)),
+          builder: (context) => ViewProfile(userId: widget.userId),
+        ),
       );
     } catch (e) {
       setState(() {
         errorMessage = 'Error accepting friend request.';
       });
-      print('Error accepting friend request: $e'); // Debugging
     }
   }
 
   Future<void> _declineFriendRequest() async {
     try {
       await FirebaseFirestore.instance
-          .collection('friend_requests')
-          .doc('${widget.userId}-$currentUserId')
+          .collection('users')
+          .doc(currentUserId)
+          .collection('friends')
+          .doc('requests')
+          .collection(widget.userId)
+          .doc()
           .delete();
 
-      // Send a notification
       await _sendNotification(
           widget.userId, 'Friend Request Declined', 'Friend request declined.');
 
-      // Navigate to AddFriend
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-            builder: (context) => AddFriend(userId: widget.userId)),
+          builder: (context) => AddFriend(userId: widget.userId),
+        ),
       );
     } catch (e) {
       setState(() {
@@ -190,9 +235,9 @@ class _FriendRequestState extends State<FriendRequest> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatItem('671', 'Tasks'),
-                      _buildStatItem('10.6k', 'Space'),
-                      _buildStatItem('562', 'Friends'),
+                      _buildStatItem(taskCount.toString(), 'Tasks'),
+                      _buildStatItem(spaceCount.toString(), 'Space'),
+                      _buildStatItem(friendCount.toString(), 'Friends'),
                     ],
                   ),
                 ),
@@ -246,10 +291,8 @@ class _FriendRequestState extends State<FriendRequest> {
   Widget _buildStatItem(String count, String label) {
     return Column(
       children: [
-        Text(count,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.black)),
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(count, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(label),
       ],
     );
   }

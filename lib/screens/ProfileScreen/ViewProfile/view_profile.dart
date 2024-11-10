@@ -109,6 +109,7 @@ class _ViewProfileState extends State<ViewProfile> {
 
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
+
         setState(() {
           userName = '${data['firstName']} ${data['lastName']}'.toUpperCase();
           userSection = data['section'] ?? 'N/A';
@@ -116,10 +117,14 @@ class _ViewProfileState extends State<ViewProfile> {
           program = data['program'] ?? 'N/A';
           year = data['year'] ?? 'N/A';
           profileImageUrl = data['profileImageUrl'] ?? '';
-          taskCount = data['tasks']?.length ?? 0; // Assume tasks is a list
-          spaceCount = data['space'] ?? 0; // Adjust as per your data structure
-          friendCount =
-              data['friends']?.length ?? 0; // Assume friends is a list
+
+          // Set counts to zero if the data is not present or empty
+          taskCount = (data['tasks'] as List<dynamic>?)?.length ??
+              0; // Assume tasks is a list
+          friendCount = (data['friends'] as List<dynamic>?)?.length ??
+              0; // Assume friends is a list
+          spaceCount = data['spaces'] ?? 0; // Assume spaces is a numeric value
+
           isLoading = false;
         });
       } else {
