@@ -20,6 +20,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   late int _currentYear;
   late int _currentMonthIndex;
   List<DocumentSnapshot> _tasks = [];
+  // String selectedSortOption = "Sort By"; // Track the selected sorting option
 
   @override
   void initState() {
@@ -68,25 +69,20 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     try {
       String uid = FirebaseAuth.instance.currentUser!.uid;
 
-      // Get the start of the selected day and end of the selected day
       DateTime startOfDay = DateTime(
           _selectedDay.year, _selectedDay.month, _selectedDay.day, 0, 0);
       DateTime endOfDay = DateTime(
           _selectedDay.year, _selectedDay.month, _selectedDay.day, 23, 59, 59);
 
-      // Query for tasks that start on or before the selected day and end on or after the selected day
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+      Query tasksQuery = FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: uid)
-          .where('startTime',
-              isLessThanOrEqualTo:
-                  endOfDay) // Task starts before or on the selected day
-          .where('endTime',
-              isGreaterThanOrEqualTo:
-                  startOfDay) // Task ends after or on the selected day
-          .orderBy('startTime',
-              descending: false) // Ensure tasks are ordered by startTime
-          .get();
+          .where('startTime', isLessThanOrEqualTo: endOfDay)
+          .where('endTime', isGreaterThanOrEqualTo: startOfDay)
+          .orderBy('startTime', descending: false)
+          .orderBy('weight', descending: true); // Chain order by weight
+
+      QuerySnapshot querySnapshot = await tasksQuery.get();
 
       setState(() {
         _tasks = querySnapshot.docs;
@@ -245,43 +241,32 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             ),
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const TaskCreationScreen(),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2C3C3C),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                padding: const EdgeInsets.symmetric(
-                    vertical: 10.0, horizontal: 16.0),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.add, color: Colors.white),
-                  SizedBox(width: 8.0),
-                  Text(
-                    'Create Task',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        // actions: [
+        //   Padding(
+        //     padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        //     child: ElevatedButton(
+        //       onPressed: () {
+        //         _showSortDialog(context); // Show the sorting dialog
+        //       },
+        //       style: ElevatedButton.styleFrom(
+        //         backgroundColor: const Color(0xFF2C3C3C),
+        //         shape: RoundedRectangleBorder(
+        //           borderRadius: BorderRadius.circular(8.0),
+        //         ),
+        //         padding: const EdgeInsets.symmetric(
+        //             vertical: 10.0, horizontal: 16.0),
+        //       ),
+        //       child: Text(
+        //         selectedSortOption, // Display selected option
+        //         style: const TextStyle(
+        //           color: Colors.white,
+        //           fontSize: 16.0,
+        //           fontWeight: FontWeight.bold,
+        //         ),
+        //       ),
+        //     ),
+        //   ),
+        // ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -296,7 +281,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 onPageChanged: (index) {
                   setState(() {
                     _startOfWeek = _getStartOfWeekFromIndex(index);
-                    // No need to manually fetch tasks here; StreamBuilder will handle updates
                   });
                 },
                 itemBuilder: (context, index) {
@@ -315,8 +299,102 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const TaskCreationScreen(),
+            ),
+          );
+        },
+        backgroundColor: const Color(0xFF2C3C3C),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Create Task',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16.0,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
     );
   }
+
+  // Function to show the sorting dialog
+  // void _showSortDialog(BuildContext context) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         title: const Text("Sort By"),
+  //         content: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             ListTile(
+  //               title: const Text("No Sorting"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //             ListTile(
+  //               title: const Text("Weight"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By - Weight");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //             ListTile(
+  //               title: const Text("Priority"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By - Priority");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //             ListTile(
+  //               title: const Text("Importance"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By - Importance");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //             ListTile(
+  //               title: const Text("Urgency"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By - Urgency");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //             ListTile(
+  //               title: const Text("Complexity"),
+  //               onTap: () {
+  //                 _updateSortOption("Sort By - Complexity");
+  //                 Navigator.pop(context);
+  //               },
+  //             ),
+  //           ],
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () {
+  //               Navigator.pop(context); // Close dialog
+  //             },
+  //             child: const Text("Cancel"),
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
+
+  // Function to update the selected sort option
+  // void _updateSortOption(String option) {
+  //   setState(() {
+  //     selectedSortOption = option;
+  //   });
+  // }
 
   Widget _buildOverdueSection() {
     String uid = FirebaseAuth.instance.currentUser!.uid;
@@ -441,6 +519,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 .where('startTime',
                     isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
                 .orderBy('startTime', descending: false)
+                .orderBy('weight', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
