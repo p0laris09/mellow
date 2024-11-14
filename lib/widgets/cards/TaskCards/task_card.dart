@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskDetails/task_details.dart';
 
 class TaskCard extends StatelessWidget {
@@ -55,22 +56,47 @@ class TaskCard extends StatelessWidget {
       statusColor = Colors.grey; // Pending -> Grey
     }
 
-    // Determine if the task is dismissible based on its status
-    final isDismissible = taskStatus != 'Finished';
-
     // Define the child widget content
     final taskContent = GestureDetector(
-      onTap: () {
+      onTap: () async {
+        // Fetch additional task details from Firestore
+        DocumentSnapshot taskDoc = await FirebaseFirestore.instance
+            .collection('tasks')
+            .doc(taskId)
+            .get();
+
+        Map<String, dynamic> taskData = taskDoc.data() as Map<String, dynamic>;
+
+        // Extract and convert necessary fields from Firestore
+        String description =
+            taskData['description'] ?? 'No description available';
+
+        // Ensure proper type conversion to String
+        String priority = (taskData['priority'] ?? 'Not set').toString();
+        String urgency = (taskData['urgency'] ?? 'Not set').toString();
+        String importance = (taskData['importance'] ?? 'Not set').toString();
+        String complexity = (taskData['complexity'] ?? 'Not set').toString();
+
+        // Ensure that these values are treated as strings, even if they are numbers or other types
+
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => TaskDetailsScreen(
-              taskName: taskName,
-              startTime: startTime,
-              dueDate: dueDate,
-              startDateTime: startDateTime,
-              dueDateTime: dueDateTime,
-              taskStatus: taskStatus, // Pass status to details screen
+              taskId: taskId, // taskId to uniquely identify the task
+              taskName: taskName, // task name
+              startTime: startTime, // start time
+              dueDate: dueDate, // due date
+              startDateTime:
+                  startDateTime, // start date time (if different from startTime)
+              dueDateTime:
+                  dueDateTime, // due date time (if different from dueDate)
+              taskStatus: taskStatus,
+              description: description, // task description
+              priority: priority, // priority level
+              urgency: urgency, // urgency level
+              importance: importance, // importance level
+              complexity: complexity, // complexity level
             ),
           ),
         );
@@ -115,7 +141,7 @@ class TaskCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Start: $startTime',
+                    'Start: ${DateFormat('yyyy-MM-dd HH:mm').format(startDateTime)}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[500],
@@ -123,7 +149,7 @@ class TaskCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Due: $dueDate',
+                    'Due: ${DateFormat('yyyy-MM-dd HH:mm').format(dueDateTime)}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[500],
@@ -147,6 +173,7 @@ class TaskCard extends StatelessWidget {
     );
 
     // Return the Dismissible widget only if the task is not finished
+    final isDismissible = taskStatus != 'Finished';
     if (isDismissible) {
       return Dismissible(
         key: Key(taskId),

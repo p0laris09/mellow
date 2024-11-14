@@ -1,6 +1,5 @@
-import 'dart:math';
-
 class Task {
+  String userId; // Track task ownership
   String taskName;
   DateTime dueDate;
   DateTime startTime;
@@ -10,34 +9,48 @@ class Task {
   double urgency;
   double importance;
   double complexity;
-  double weight; // Add this field to store the calculated weight
+  double weight = 0.0;
 
   Task({
+    required this.userId,
     required this.taskName,
     required this.dueDate,
     required this.startTime,
     required this.endTime,
-    required this.description,
-    required this.priority,
-    required this.urgency,
-    required this.importance,
-    required this.complexity,
-  }) : weight = 0.0; // Initialize weight to zero
+    this.description = '',
+    this.priority = 0.0,
+    this.urgency = 0.0,
+    this.importance = 0.0,
+    this.complexity = 0.0,
+  }) : weight = 0.0; // Initialize weight
 
-  // Calculate and update the task's weight based on AHP criteria
+  // Calculate and update the task's weight based on criteria weights
   void updateWeight(Map<String, double> criteriaWeights) {
-    weight = (priority * criteriaWeights['priority']!) +
-        (urgency * criteriaWeights['urgency']!) +
-        (importance * criteriaWeights['importance']!) +
-        (complexity * criteriaWeights['complexity']!);
+    priority = (priority / 3.0).clamp(0.0, 1.0);
+    urgency = (urgency / 3.0).clamp(0.0, 1.0);
+    importance = (importance / 3.0).clamp(0.0, 1.0);
+    complexity = (complexity / 3.0).clamp(0.0, 1.0);
+
+    double weightedPriority = priority * criteriaWeights['priority']!;
+    double weightedUrgency = urgency * criteriaWeights['urgency']!;
+    double weightedImportance = importance * criteriaWeights['importance']!;
+    double weightedComplexity = complexity * criteriaWeights['complexity']!;
+
+    weight = weightedPriority +
+        weightedUrgency +
+        weightedImportance +
+        weightedComplexity;
+
+    // Debugging: Print updated weight
+    print("Updated Task Weight for '${taskName}': $weight");
   }
 
-  // Method to validate the task times
+  // Validate task times
   bool validateTaskTimes() {
     return startTime.isBefore(endTime);
   }
 
-  // Method to check if two tasks overlap in time
+  // Check if two tasks overlap in time
   bool overlapsWith(Task other) {
     return startTime.isBefore(other.endTime) &&
         endTime.isAfter(other.startTime);
@@ -52,6 +65,7 @@ class Task {
 }
 
 class TaskManager {
+  String currentUserId;
   List<Task> tasks = [];
   Map<String, double> criteriaWeights = {
     'priority': 0.4,
@@ -60,41 +74,62 @@ class TaskManager {
     'complexity': 0.1,
   };
 
-  final double weightLimit = 15.0; // The weight limit threshold
+  final double weightLimit = 60.0;
 
-  // AHP step: Normalize weights and store in criteriaWeights
+  TaskManager({required this.currentUserId});
+
+  // Apply AHP to normalize weights
   void applyAHP() {
     double total = criteriaWeights.values.reduce((a, b) => a + b);
     criteriaWeights =
         criteriaWeights.map((key, value) => MapEntry(key, value / total));
   }
 
-  // Check if the total weight for a time slot exceeds the limit
-  bool checkWeightInTimeSlot(DateTime startTime, DateTime endTime) {
-    double totalWeight = 0.0;
+  // Check if total weight in a time slot exceeds the limit
+  bool checkWeightInTimeSlot(Task newTask) {
+    DateTime start = newTask.startTime;
+    DateTime end = newTask.endTime;
 
-    // Check tasks in the same time slot
-    for (var task in tasks) {
-      if ((task.startTime.isBefore(endTime) &&
-          task.endTime.isAfter(startTime))) {
-        totalWeight += task.weight;
+    // Iterate over every hour the new task spans
+    while (start.isBefore(end)) {
+      // Calculate the total weight of tasks in the current hour (start to start+1 hour)
+      double hourWeight = tasks
+          .where((task) =>
+              task.userId == currentUserId &&
+              task.startTime.isBefore(start.add(Duration(hours: 1))) &&
+              task.endTime.isAfter(start))
+          .fold(0.0, (sum, task) => sum + task.weight);
+
+      // Add the weight of the new task to the weight of the current hour
+      hourWeight += newTask.weight;
+
+      // Print the cumulative weight for debugging
+      print("Time: $start - Cumulative Hour Weight: $hourWeight, "
+          "New Task Weight: ${newTask.weight}, Weight Limit: $weightLimit");
+
+      if (hourWeight > weightLimit) {
+        // If the weight limit is exceeded, return false (don't add the task)
+        return false;
       }
+
+      // Move to the next hour to check for overlap in that hour
+      start = start.add(Duration(hours: 1));
     }
 
-    // Return whether the total weight exceeds the limit
-    return totalWeight <= weightLimit;
+    // If no hour exceeded the weight limit, allow the task to be added
+    return true;
   }
 
-  // Add a task to the manager if valid and within the weight limit
+  // Add a task if valid and within weight limit
   void addTask(Task task) {
     if (task.validateTaskTimes()) {
       task.updateWeight(
-          criteriaWeights); // Update the task's weight before adding
+          criteriaWeights); // Ensure weight is updated before conflict check
 
-      // Check if the task can be added without exceeding the weight limit
-      if (!checkWeightInTimeSlot(task.startTime, task.endTime)) {
-        print('Conflict: Adding task "${task.taskName}" exceeds weight limit.');
-        return; // Task is not added due to weight conflict
+      if (!checkWeightInTimeSlot(task)) {
+        print(
+            'Conflict: Adding task "${task.taskName}" exceeds weight limit in one or more hours.');
+        return;
       }
 
       tasks.add(task);
@@ -105,15 +140,14 @@ class TaskManager {
     }
   }
 
-  // IJFA step: Optimize task schedule based on task weights
+  // Optimize task schedule with IJFA
   List<Task> applyIJFA() {
     List<Task> population = List.from(tasks);
-    int iterations = 10; // Define the number of iterations for IJFA
+    int iterations = 10;
     List<Task> bestArrangement = List.from(population);
     double bestFitness = calculateFitness(bestArrangement);
 
     for (int i = 0; i < iterations; i++) {
-      // Shuffle tasks to simulate jellyfish movement
       population.shuffle();
       double currentFitness = calculateFitness(population);
 
@@ -125,22 +159,20 @@ class TaskManager {
     return bestArrangement;
   }
 
-  // Calculate the fitness of a task arrangement based on their weights
+  // Calculate fitness of a task arrangement
   double calculateFitness(List<Task> taskArrangement) {
     return taskArrangement.fold(0.0, (sum, task) => sum + task.weight);
   }
 
-  // Hyper Min-Max step: Balance task load to prevent peaks and idle slots
+  // Balance task load to prevent peaks and idle slots with Hyper Min-Max
   void applyHyperMinMax() {
     Map<int, List<Task>> timeSlots = {};
 
-    // Group tasks by time slots and calculate load
     for (var task in tasks) {
-      int timeSlot = task.startTime.hour; // Example time slot by hour
+      int timeSlot = task.startTime.hour;
       timeSlots[timeSlot] = (timeSlots[timeSlot] ?? [])..add(task);
     }
 
-    // Adjust task times to balance load across slots
     for (var slot in timeSlots.keys) {
       List<Task> overloadedTasks = timeSlots[slot]!;
       if (overloadedTasks.length > 1) {
@@ -152,20 +184,19 @@ class TaskManager {
     }
   }
 
-  // Get sorted and optimized tasks for a specific time
+  // Get optimized task list for a specific time
   List<Task> getOptimizedTaskList(DateTime time) {
-    applyAHP(); // Apply AHP to update criteria weights
-    var optimizedTasks = applyIJFA(); // Apply IJFA to get optimized arrangement
-    applyHyperMinMax(); // Balance load using Hyper Min-Max
+    applyAHP();
+    var optimizedTasks = applyIJFA();
+    applyHyperMinMax();
 
-    // Filter tasks that overlap the specified time
     return optimizedTasks
         .where((task) =>
             task.startTime.isBefore(time) && task.endTime.isAfter(time))
         .toList();
   }
 
-  // Show optimized task priorities for a given time
+  // Display task priorities for a specific time
   void showTaskPrioritiesForTime(DateTime time) {
     var optimizedTasks = getOptimizedTaskList(time);
 
@@ -180,42 +211,72 @@ class TaskManager {
     }
   }
 
-  // Enhanced conflict detector that suggests alternative times
+  // Conflict detector that considers weight limit before suggesting alternative times
   void detectConflictsWithSuggestions() {
     for (int i = 0; i < tasks.length; i++) {
       for (int j = i + 1; j < tasks.length; j++) {
-        if (tasks[i].overlapsWith(tasks[j])) {
+        Task taskA = tasks[i];
+        Task taskB = tasks[j];
+
+        // Skip tasks with weight 0.0
+        if (taskA.weight == 0.0 || taskB.weight == 0.0) continue;
+
+        // Check if tasks overlap in time
+        if (taskA.overlapsWith(taskB)) {
           print(
-              'Conflict detected between "${tasks[i].taskName}" and "${tasks[j].taskName}"');
-          List<DateTime> alternativeTimes =
-              suggestAlternativeTimes(tasks[j], 2);
-          print('Suggested alternative times for "${tasks[j].taskName}":');
-          for (var time in alternativeTimes) {
-            print('- $time');
+              'Conflict detected between "${taskA.taskName}" and "${taskB.taskName}"');
+
+          // Check if weight limit is exceeded in the overlapping time slot for taskB
+          bool exceedsWeightLimit = !checkWeightInTimeSlot(taskB);
+
+          if (exceedsWeightLimit) {
+            print('Adding "${taskB.taskName}" would exceed weight limit.');
+
+            // Suggest alternative times for taskB only if weight limit is exceeded
+            List<DateTime> alternativeTimes = suggestAlternativeTimes(taskB, 2);
+            print('Suggested alternative times for "${taskB.taskName}":');
+            for (var time in alternativeTimes) {
+              print('- $time');
+            }
+          } else {
+            print(
+                'Conflict detected, but weight limit is not exceeded for "${taskB.taskName}".');
           }
         }
       }
     }
   }
 
-  // Method to suggest alternative times for a conflicting task
+// Suggest alternative times for a conflicting task based on weight limits
   List<DateTime> suggestAlternativeTimes(Task task, int numSuggestions) {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
-    Duration interval = Duration(hours: 1); // Example interval
+    Duration interval = Duration(hours: 1);
+
+    DateTime endOfDay =
+        DateTime(current.year, current.month, current.day, 23, 59, 59);
 
     while (suggestions.length < numSuggestions) {
       DateTime proposedStart = current.add(interval);
       DateTime proposedEnd =
           proposedStart.add(task.endTime.difference(task.startTime));
 
-      // Check if the proposed time conflicts with other tasks
-      bool conflict = tasks.any((t) =>
-          t != task &&
-          (proposedStart.isBefore(t.endTime) &&
-              proposedEnd.isAfter(t.startTime)));
+      if (proposedStart.isAfter(endOfDay)) break;
 
-      if (!conflict) {
+      // Check if this time slot does not exceed the weight limit
+      bool withinWeightLimit = checkWeightInTimeSlot(Task(
+        userId: task.userId,
+        taskName: task.taskName,
+        dueDate: task.dueDate,
+        startTime: proposedStart,
+        endTime: proposedEnd,
+        priority: task.priority,
+        urgency: task.urgency,
+        importance: task.importance,
+        complexity: task.complexity,
+      ));
+
+      if (withinWeightLimit) {
         suggestions.add(proposedStart);
       }
 

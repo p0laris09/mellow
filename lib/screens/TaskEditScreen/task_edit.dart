@@ -3,48 +3,71 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:mellow/models/TaskModel/task_model.dart';
+import 'package:mellow/models/TaskModel/edittask_model.dart';
 
-class TaskCreationScreen extends StatefulWidget {
-  const TaskCreationScreen({super.key});
+class TaskEditScreen extends StatefulWidget {
+  final bool isEditMode;
+  final String taskId;
+  final String taskName;
+  final String startTime;
+  final String dueDate;
+  final String taskStatus;
+  final String description;
+  final double priority;
+  final double urgency;
+  final double importance;
+  final double complexity;
+
+  const TaskEditScreen({
+    super.key,
+    required this.isEditMode,
+    required this.taskId,
+    required this.taskName,
+    required this.startTime,
+    required this.dueDate,
+    required this.taskStatus,
+    required this.description,
+    required this.priority,
+    required this.urgency,
+    required this.importance,
+    required this.complexity,
+  });
 
   @override
-  State<TaskCreationScreen> createState() => _TaskCreationScreenState();
+  _TaskEditScreenState createState() => _TaskEditScreenState();
 }
 
 class TaskManager {
   List<Task> tasks = [];
+  final String userId;
 
-  Future<void> loadTasksFromFirestore(
-      String userId, Map<String, double> criteriaWeights) async {
-    try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('tasks')
-          .where('userId', isEqualTo: userId)
-          .get();
+  TaskManager({required this.userId});
 
-      tasks = querySnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
-        Task task = Task(
-          userId: data['userId'],
-          taskName: data['taskName'],
-          dueDate: (data['dueDate'] as Timestamp).toDate(),
-          startTime: (data['startTime'] as Timestamp).toDate(),
-          endTime: (data['endTime'] as Timestamp).toDate(),
-          description: data['description'] ?? '',
-          priority: data['priority'] ?? 1.0,
-          urgency: data['urgency'] ?? 1.0,
-          importance: data['importance'] ?? 1.0,
-          complexity: data['complexity'] ?? 1.0,
-        );
-        task.updateWeight(criteriaWeights); // Pass criteriaWeights
-        return task;
-      }).toList();
+  // Load existing tasks from Firestore, specific to the user
+  Future<void> loadTasksFromFirestore() async {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('tasks')
+        .where('userId', isEqualTo: userId)
+        .get();
 
-      print("Loaded ${tasks.length} tasks for user $userId.");
-    } catch (e) {
-      print("Error loading tasks: $e");
-    }
+    tasks = querySnapshot.docs.map((doc) {
+      Map<String, dynamic> data = doc.data();
+      return Task(
+        userId: data['userId'],
+        taskName: data['taskName'],
+        dueDate: (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        startTime:
+            (data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        endTime: (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        description: data['description'] ?? '',
+        priority: data['priority']?.toDouble() ?? 1.0,
+        urgency: data['urgency']?.toDouble() ?? 1.0,
+        importance: data['importance']?.toDouble() ?? 1.0,
+        complexity: data['complexity']?.toDouble() ?? 1.0,
+        taskId: doc.id,
+      );
+    }).toList();
+    print("Loaded tasks for user $userId: ${tasks.length}");
   }
 
   List<DateTime> suggestBestTimes(Task newTask, double weightLimit) {
@@ -67,177 +90,122 @@ class TaskManager {
         DateTime proposedStart = time;
         DateTime proposedEnd = proposedStart.add(taskDuration);
 
-        // Debugging: Print the proposed time being checked
-        print("Checking time: ${proposedStart.toIso8601String()}");
-
-        // Check for cumulative weight in the proposed time slot (without including the new task)
         double hourWeight = tasks
             .where((task) =>
                 task.startTime.isBefore(proposedEnd) &&
                 task.endTime.isAfter(proposedStart))
             .fold(0.0, (sum, task) => sum + task.weight);
 
-        // Debugging: Print the weight for the time slot
-        print(
-            "hourWeight: $hourWeight, newTask.weight: ${newTask.weight}, weightLimit: $weightLimit");
-
-        // Ensure the total weight does not exceed the limit, including the new task's weight
         if (hourWeight + newTask.weight <= weightLimit &&
-            proposedStart.isAfter(now.subtract(Duration(minutes: 5)))) {
+            proposedStart.isAfter(now)) {
           bestTimes.add(proposedStart);
-          print("Valid slot found: ${proposedStart.toIso8601String()}");
-
-          // Stop once we've found 2 best times
-          if (bestTimes.length >= 2) break;
         }
       }
-
-      // Stop after finding 2 best times across days
-      if (bestTimes.length >= 2) break;
     }
 
-    // Return the best times (up to 2), or an empty list if no valid times are found
-    return bestTimes.isNotEmpty ? bestTimes.take(2).toList() : [];
+    return bestTimes.take(2).toList();
   }
 
-  Future<void> addTaskWithConflictResolution(
-    Task newTask,
+  bool checkWeightInTimeSlotExcludingTask(
+      Task newTask, DateTime startTime, DateTime endTime, double weightLimit) {
+    double totalWeight = tasks.fold(0.0, (sum, task) {
+      if (task.startTime.isBefore(endTime) && task.endTime.isAfter(startTime)) {
+        return sum + task.weight;
+      }
+      return sum;
+    });
+
+    return totalWeight + newTask.weight <= weightLimit;
+  }
+
+  Future<void> addOrUpdateTaskWithConflictResolution(
+    Task task,
     BuildContext context,
-    String? userId,
+    String currentUserId,
     Function(Task) onTaskResolved,
     double weightLimit,
     Map<String, double> criteriaWeights,
   ) async {
-    // Update the task's weight before checking conflicts
-    newTask.updateWeight(criteriaWeights);
+    await loadTasksFromFirestore();
 
-    // Initialize total weight with the new task's weight
-    double totalWeight = newTask.weight;
+    if (!checkWeightInTimeSlotExcludingTask(
+        task, task.startTime, task.endTime, weightLimit)) {
+      List<DateTime> alternativeTimes = suggestBestTimes(task, weightLimit);
 
-    // Check for any conflicts and calculate the cumulative weight for overlapping tasks
-    for (var task in tasks) {
-      task.updateWeight(
-          criteriaWeights); // Ensure each task's weight is updated
-      if (newTask.overlapsWith(task)) {
-        totalWeight += task.weight; // Add weight of the conflicting task
-        print(
-            "Conflict with task: ${task.taskName}, Weight: ${task.weight}, Total weight now: $totalWeight");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Conflict detected. Suggested times: $alternativeTimes')),
+        );
       }
-    }
-
-    print("Total weight after checking for conflicts: $totalWeight");
-
-    // Check if total weight exceeds the limit
-    if (totalWeight > weightLimit) {
-      print("Total weight exceeds the limit, showing conflict dialog.");
-      await showConflictDialog(newTask, context, onTaskResolved, weightLimit);
     } else {
-      // No conflict, add the task directly
-      print("No conflict detected, adding the task directly.");
-      onTaskResolved(newTask); // Immediately resolve the task
+      if (task.taskId.isNotEmpty) {
+        await _updateTaskInFirestore(task);
+      } else {
+        await _addTaskToFirestore(task);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Task "${task.taskName}" added/updated successfully.')),
+        );
+      }
+
+      onTaskResolved(task);
     }
   }
 
-  Future<void> showConflictDialog(Task conflictingTask, BuildContext context,
-      Function(Task) onTaskResolved, double weightLimit) async {
-    List<DateTime> bestTimes = suggestBestTimes(conflictingTask, weightLimit);
-    final duration =
-        conflictingTask.endTime.difference(conflictingTask.startTime);
+  Future<void> _addTaskToFirestore(Task task) async {
+    try {
+      DocumentReference docRef =
+          await FirebaseFirestore.instance.collection('tasks').add({
+        'userId': task.userId,
+        'taskName': task.taskName,
+        'startTime': task.startTime,
+        'endTime': task.endTime,
+        'dueDate': task.dueDate,
+        'description': task.description,
+        'priority': task.priority,
+        'urgency': task.urgency,
+        'importance': task.importance,
+        'complexity': task.complexity,
+      });
+      task.taskId = docRef.id;
+    } catch (e) {
+      print("Failed to add task: $e");
+    }
+  }
 
-    if (bestTimes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No available time slots found.')),
-      );
+  Future<void> _updateTaskInFirestore(Task task) async {
+    if (task.taskId.isEmpty) {
+      print("Task ID is missing, cannot update.");
       return;
     }
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Task Conflict Detected'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                  'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.'),
-              const SizedBox(height: 16),
-              for (var i = 0; i < bestTimes.length; i++)
-                _buildTimeCard(
-                  context: context,
-                  time: bestTimes[i],
-                  label: i == 0 ? "Suggested Best Time" : "Second Best Time",
-                  onSelect: () {
-                    // Update task's start and end time here
-                    conflictingTask.startTime = bestTimes[i];
-                    conflictingTask.endTime = bestTimes[i].add(duration);
-                    onTaskResolved(
-                        conflictingTask); // Resolve with updated task
-                    Navigator.pop(context); // Close dialog
-                  },
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog without selecting a time
-              },
-              child: const Text('Change Time Manually'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTimeCard({
-    required BuildContext context,
-    required DateTime time,
-    required String label,
-    required VoidCallback onSelect,
-  }) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              DateFormat('yyyy-MM-dd HH:mm').format(time),
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: ElevatedButton(
-                onPressed: onSelect,
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: Theme.of(context).primaryColor,
-                ),
-                child: const Text('Choose This Time'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    try {
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(task.taskId)
+          .update({
+        'taskName': task.taskName,
+        'startTime': task.startTime,
+        'endTime': task.endTime,
+        'dueDate': task.dueDate,
+        'description': task.description,
+        'priority': task.priority,
+        'urgency': task.urgency,
+        'importance': task.importance,
+        'complexity': task.complexity,
+      });
+    } catch (e) {
+      print("Failed to update task: $e");
+    }
   }
 }
 
-class _TaskCreationScreenState extends State<TaskCreationScreen> {
+class _TaskEditScreenState extends State<TaskEditScreen> {
   final TextEditingController _taskNameController = TextEditingController();
   final TextEditingController _dueDateController = TextEditingController();
   final TextEditingController _startTimeController = TextEditingController();
@@ -250,10 +218,15 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   double _importance = 1;
   double _complexity = 1;
 
+  late TaskManager taskManager;
+  late Task taskBeingEdited;
+
   @override
   void initState() {
     super.initState();
-
+    String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+    taskManager = TaskManager(userId: currentUserId);
+    _loadTask();
     _descriptionController.addListener(() {
       setState(() {
         _descriptionCharCount = _descriptionController.text.length;
@@ -261,6 +234,53 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     });
   }
 
+  // Load the task from Firestore and set values for editing
+  Future<void> _loadTask() async {
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .get();
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Initialize taskBeingEdited with the data
+        taskBeingEdited = Task(
+          userId: FirebaseAuth.instance.currentUser!.uid,
+          taskId: widget.taskId,
+          taskName: data['taskName'] ?? '',
+          startTime:
+              (data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          endTime: (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          dueDate: (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          description: data['description'] ?? '',
+          priority: data['priority']?.toDouble() ?? 1,
+          urgency: data['urgency']?.toDouble() ?? 1,
+          importance: data['importance']?.toDouble() ?? 1,
+          complexity: data['complexity']?.toDouble() ?? 1,
+        );
+
+        setState(() {
+          _taskNameController.text = taskBeingEdited.taskName;
+          _dueDateController.text =
+              DateFormat('yyyy-MM-dd HH:mm').format(taskBeingEdited.dueDate);
+          _startTimeController.text =
+              DateFormat('yyyy-MM-dd HH:mm').format(taskBeingEdited.startTime);
+          _endTimeController.text =
+              DateFormat('yyyy-MM-dd HH:mm').format(taskBeingEdited.endTime);
+          _descriptionController.text = taskBeingEdited.description;
+          _priority = taskBeingEdited.priority;
+          _urgency = taskBeingEdited.urgency;
+          _importance = taskBeingEdited.importance;
+          _complexity = taskBeingEdited.complexity;
+        });
+      }
+    } catch (e) {
+      print("Error loading task: $e");
+    }
+  }
+
+  // Suggest best times for the task
   Future<void> _selectDateTime(
       BuildContext context, TextEditingController controller) async {
     DateTime now = DateTime.now();
@@ -300,104 +320,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     }
   }
 
-  Future<void> _createTaskInFirestore() async {
-    String taskName = _taskNameController.text;
-    String dueDateString = _dueDateController.text;
-    String startTimeString = _startTimeController.text;
-    String endTimeString = _endTimeController.text;
-    String description = _descriptionController.text;
-    String? userId = FirebaseAuth.instance.currentUser?.uid;
-
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
-      return;
-    }
-
-    DateTime? dueDate = dueDateString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
-        : null;
-    DateTime? startTime = startTimeString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(startTimeString)
-        : null;
-    DateTime? endTime = endTimeString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
-        : null;
-
-    if (taskName.isNotEmpty &&
-        dueDate != null &&
-        startTime != null &&
-        endTime != null) {
-      // Create a new Task object with the provided details
-      Task newTask = Task(
-        userId: userId,
-        taskName: taskName,
-        dueDate: dueDate,
-        startTime: startTime,
-        endTime: endTime,
-        description: description,
-        priority: _priority,
-        urgency: _urgency,
-        importance: _importance,
-        complexity: _complexity,
-      );
-
-      // Initialize the TaskManager
-      TaskManager taskManager = TaskManager();
-
-// Define criteriaWeights
-      Map<String, double> criteriaWeights = {
-        'priority': _priority,
-        'urgency': _urgency,
-        'importance': _importance,
-        'complexity': _complexity,
-      };
-
-// Pass both userId and criteriaWeights when calling loadTasksFromFirestore
-      await taskManager.loadTasksFromFirestore(userId, criteriaWeights);
-
-      double weightLimit = 12.1; // Example weight limit
-
-      // Add conflict resolution before task creation
-      await taskManager.addTaskWithConflictResolution(
-        newTask,
-        context,
-        userId,
-        (resolvedTask) async {
-          // Add the resolved task to Firestore
-          await FirebaseFirestore.instance.collection('tasks').add({
-            'taskName': resolvedTask.taskName,
-            'dueDate': Timestamp.fromDate(resolvedTask.dueDate),
-            'startTime': Timestamp.fromDate(resolvedTask.startTime),
-            'endTime': Timestamp.fromDate(resolvedTask.endTime),
-            'description': description,
-            'priority': _priority,
-            'urgency': _urgency,
-            'importance': _importance,
-            'complexity': _complexity,
-            'weight': resolvedTask.weight,
-            'createdAt': Timestamp.now(),
-            'userId': userId,
-            'status': 'pending',
-          });
-
-          // Show success message and close the screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task created successfully')),
-          );
-          Navigator.pop(context);
-        },
-        weightLimit,
-        criteriaWeights,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -415,7 +337,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           },
         ),
         title: const Text(
-          'Create a Task',
+          'Edit Task',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
@@ -599,16 +521,50 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     const SizedBox(height: 25),
                     Center(
                       child: ElevatedButton(
-                        onPressed: _createTaskInFirestore,
+                        onPressed: () async {
+                          // Update taskBeingEdited with new values from controllers
+                          taskBeingEdited = Task(
+                            userId: FirebaseAuth.instance.currentUser!.uid,
+                            taskId: widget.taskId,
+                            taskName: _taskNameController.text,
+                            startTime: DateFormat('yyyy-MM-dd HH:mm')
+                                .parse(_startTimeController.text),
+                            endTime: DateFormat('yyyy-MM-dd HH:mm')
+                                .parse(_endTimeController.text),
+                            dueDate: DateFormat('yyyy-MM-dd HH:mm')
+                                .parse(_dueDateController.text),
+                            description: _descriptionController.text,
+                            priority: _priority,
+                            urgency: _urgency,
+                            importance: _importance,
+                            complexity: _complexity,
+                          );
+
+                          // Attempt to add or update task with conflict resolution
+                          await taskManager
+                              .addOrUpdateTaskWithConflictResolution(
+                            taskBeingEdited,
+                            context,
+                            FirebaseAuth.instance.currentUser!.uid,
+                            (resolvedTask) {
+                              print('Task resolved and updated.');
+                            },
+                            15, // Replace with actual weight limit as needed
+                            {
+                              'priority': _priority,
+                              'urgency': _urgency,
+                              'importance': _importance,
+                              'complexity': _complexity,
+                            },
+                          );
+                        },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 50,
-                            vertical: 20,
-                          ),
+                              horizontal: 50, vertical: 20),
                           foregroundColor: Colors.white,
                           backgroundColor: const Color(0xFF2C3C3C),
                         ),
-                        child: const Text('Create Task'),
+                        child: const Text('Update Task'),
                       ),
                     ),
                   ],

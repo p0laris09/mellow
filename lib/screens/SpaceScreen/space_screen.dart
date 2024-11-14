@@ -39,25 +39,23 @@ class _SpaceScreenState extends State<SpaceScreen> {
           .where('admin', isEqualTo: uid)
           .get();
 
-      // Combine both queries
+      // Combine both queries, including the document ID for each space
       final allSpaces = [
-        ...spacesQuery.docs.map((doc) => doc.data()),
-        ...spacesWithAdminQuery.docs.map((doc) => doc.data())
+        ...spacesQuery.docs.map((doc) => {...doc.data(), 'spaceId': doc.id}),
+        ...spacesWithAdminQuery.docs
+            .map((doc) => {...doc.data(), 'spaceId': doc.id}),
       ];
 
       // Sort spaces by `lastOpened` timestamp, in descending order
       allSpaces.sort((a, b) {
-        final lastOpenedA = a['lastOpened'] != null &&
-                a['lastOpened'] is Timestamp
-            ? (a['lastOpened'] as Timestamp).toDate()
-            : DateTime
-                .now(); // Default to current date if null or not a valid Timestamp
-        final lastOpenedB = b['lastOpened'] != null &&
-                b['lastOpened'] is Timestamp
-            ? (b['lastOpened'] as Timestamp).toDate()
-            : DateTime
-                .now(); // Default to current date if null or not a valid Timestamp
-
+        final lastOpenedA =
+            a['lastOpened'] != null && a['lastOpened'] is Timestamp
+                ? (a['lastOpened'] as Timestamp).toDate()
+                : DateTime.now();
+        final lastOpenedB =
+            b['lastOpened'] != null && b['lastOpened'] is Timestamp
+                ? (b['lastOpened'] as Timestamp).toDate()
+                : DateTime.now();
         return lastOpenedB.compareTo(lastOpenedA);
       });
 
@@ -82,6 +80,7 @@ class _SpaceScreenState extends State<SpaceScreen> {
         recentSpaces = mostRecentSpace != null
             ? [
                 {
+                  'spaceId': mostRecentSpace['spaceId'], // Add spaceId here
                   'spaceName': mostRecentSpace['name'] ?? 'Unnamed Space',
                   'admin': mostRecentSpace['admin'] ?? 'Unknown Admin',
                   'description': mostRecentSpace['description'] ??
@@ -89,10 +88,9 @@ class _SpaceScreenState extends State<SpaceScreen> {
                   'date': formattedDate,
                 }
               ]
-            : []; // Empty list if no recent space
+            : [];
       });
     } catch (e) {
-      // Handle errors if necessary
       print('Error fetching recent spaces: $e');
     }
   }
