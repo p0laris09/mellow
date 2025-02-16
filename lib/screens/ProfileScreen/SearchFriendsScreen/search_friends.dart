@@ -170,7 +170,7 @@ class _SearchFriendsState extends State<SearchFriends> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -185,7 +185,7 @@ class _SearchFriendsState extends State<SearchFriends> {
             width: MediaQuery.of(context).size.width * 0.75,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3B4B4B),
+              color: const Color(0xFF3A5D73),
               borderRadius: BorderRadius.circular(8),
             ),
             child: TextField(

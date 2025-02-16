@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore package
 import 'package:mellow/screens/SpaceScreen/ViewSpaceScreen/view_space.dart'; // Import ViewSpaceScreen
 
 class RecentSpaceCard extends StatelessWidget {
@@ -15,10 +16,33 @@ class RecentSpaceCard extends StatelessWidget {
     super.key,
   });
 
+  // Method to update the lastOpened field in Firestore
+  Future<void> updateLastOpened(String spaceId) async {
+    try {
+      // Get current time and day
+      DateTime now = DateTime.now();
+      String formattedDate =
+          "${now.year}-${now.month}-${now.day} ${now.hour}:${now.minute}:${now.second}"; // Example: 2024-11-21 14:30:00
+
+      // Update Firestore document with the current time in the lastOpened field
+      await FirebaseFirestore.instance
+          .collection('spaces')
+          .doc(spaceId)
+          .update({
+        'lastOpened': formattedDate,
+      });
+    } catch (e) {
+      print("Error updating lastOpened field: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
+        // Update the lastOpened field in Firestore before navigating
+        updateLastOpened(spaceId);
+
         // Navigate to the ViewSpaceScreen and pass the required parameters
         Navigator.push(
           context,
@@ -37,7 +61,7 @@ class RecentSpaceCard extends StatelessWidget {
         height: 100, // Adjusted height to match the compact design
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: const Color(0xFF2C3C3C), // Background color to match the card
+          color: const Color(0xFF2275AA), // Background color to match the card
           borderRadius: BorderRadius.circular(12.0),
         ),
         child: Column(

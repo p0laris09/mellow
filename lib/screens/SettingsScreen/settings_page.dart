@@ -16,6 +16,7 @@ class _SettingsState extends State<SettingsPage> {
   bool _notificationsEnabled = false;
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  bool _isRequestingPermission = false;
 
   @override
   void initState() {
@@ -43,13 +44,20 @@ class _SettingsState extends State<SettingsPage> {
   }
 
   void _toggleNotifications(bool? value) async {
+    if (_isRequestingPermission) {
+      return; // Prevent multiple permission requests
+    }
+
     print(
         'Toggle switch clicked. Value: $value'); // Print the toggle switch value
 
     if (value ?? false) {
       // Enable notifications
       print('Requesting notification permission...');
+      _isRequestingPermission = true;
       PermissionStatus status = await Permission.notification.request();
+      _isRequestingPermission = false;
+
       if (status.isGranted) {
         setState(() => _notificationsEnabled = true);
         print('Notifications enabled.');
@@ -126,7 +134,6 @@ class _SettingsState extends State<SettingsPage> {
       showWhen: true,
       playSound: true,
       enableVibration: true,
-      // You can add the below line for exact alarms
       fullScreenIntent: true,
     );
 
@@ -157,7 +164,7 @@ class _SettingsState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -174,7 +181,6 @@ class _SettingsState extends State<SettingsPage> {
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ),

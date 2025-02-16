@@ -49,7 +49,7 @@ class TaskCard extends StatelessWidget {
     if (taskStatus == 'Finished') {
       statusColor = Colors.green; // Finished -> Green
     } else if (taskStatus == 'ongoing') {
-      statusColor = Colors.blue; // Ongoing -> Blue
+      statusColor = const Color.fromARGB(255, 33, 150, 243); // Ongoing -> Blue
     } else if (isOverdue) {
       statusColor = Colors.red; // Overdue -> Red
     } else {
@@ -91,7 +91,7 @@ class TaskCard extends StatelessWidget {
                   startDateTime, // start date time (if different from startTime)
               dueDateTime:
                   dueDateTime, // due date time (if different from dueDate)
-              taskStatus: taskStatus,
+              status: taskStatus,
               description: description, // task description
               priority: priority, // priority level
               urgency: urgency, // urgency level

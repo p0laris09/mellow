@@ -146,9 +146,9 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: const BackButton(color: Colors.white),
       ),
@@ -323,7 +323,7 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "NEXT",

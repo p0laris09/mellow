@@ -81,7 +81,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C), // Darker app bar color
+        backgroundColor: const Color(0xFF2275AA), // Darker app bar color
         centerTitle: true,
         elevation: 0,
         leading: IconButton(
@@ -203,25 +203,34 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               ),
 
               ListTile(
-                leading: const Icon(Icons.bug_report, color: Colors.black),
-                title: const Text('Report a bug',
-                    style: TextStyle(color: Colors.black)),
+                leading:
+                    const Icon(Icons.bug_report_sharp, color: Colors.black),
+                title: const Text(
+                  'Report a Bug',
+                  style: TextStyle(color: Colors.black),
+                ),
                 trailing:
                     const Icon(Icons.arrow_forward_ios, color: Colors.grey),
                 onTap: () {
-                  // Navigate to Bug Report page
+                  // Navigate to the SendfeedbackScreen using the named route
+                  Navigator.pushNamed(context, '/reportbugs');
                 },
               ),
+
               ListTile(
                 leading: const Icon(Icons.feedback, color: Colors.black),
-                title: const Text('Send feedback',
-                    style: TextStyle(color: Colors.black)),
+                title: const Text(
+                  'Send feedback',
+                  style: TextStyle(color: Colors.black),
+                ),
                 trailing:
                     const Icon(Icons.arrow_forward_ios, color: Colors.grey),
                 onTap: () {
-                  // Navigate to Feedback page
+                  // Navigate to the SendfeedbackScreen using the named route
+                  Navigator.pushNamed(context, '/sendfeedback');
                 },
               ),
+
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.black),
                 title:

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -28,22 +29,51 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
   ];
 
   Future<void> _selectDate(BuildContext context) async {
-    DateTime currentDate = DateTime.now();
-    DateTime initialDate = _selectedDate ?? currentDate;
+    DateTime now = DateTime.now();
+    DateTime maxDate = now.subtract(Duration(days: 365 * 18)); // 18 years ago
+    DateTime minDate = now.subtract(Duration(days: 365 * 50)); // 50 years ago
 
-    final DateTime? pickedDate = await showDatePicker(
+    DateTime initialDate = now.isAfter(maxDate) ? maxDate : now;
+
+    DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: currentDate,
+      firstDate: minDate,
+      lastDate: maxDate,
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor:
+                const Color(0xFF2275AA), // Match the page primary color
+            hintColor: const Color(0xFF2275AA), // Match the page accent color
+            colorScheme: ColorScheme.light(primary: const Color(0xFF2275AA)),
+            buttonTheme:
+                const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+          ),
+          child: child!,
+        );
+      },
     );
 
-    if (pickedDate != null && pickedDate != initialDate) {
-      setState(() {
-        _selectedDate = pickedDate;
-        _birthdayController.text = DateFormat('MM/dd/yyyy').format(pickedDate);
-      });
+    if (pickedDate != null) {
+      if (_isAgeValid(pickedDate)) {
+        setState(() {
+          _selectedDate = pickedDate;
+          _birthdayController.text =
+              DateFormat('MM/dd/yyyy').format(pickedDate);
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a valid date.')),
+        );
+      }
     }
+  }
+
+  /// Helper function to validate the age range
+  bool _isAgeValid(DateTime date) {
+    int age = _calculateAge(date);
+    return age >= 18 && age <= 50;
   }
 
   void _validateAndNavigate() {
@@ -58,6 +88,26 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
         _selectedGender == null) {
       setState(() {
         _errorMessage = 'Please fill in all required fields!';
+      });
+      return;
+    }
+
+    // Parse the birthday from the controller
+    DateTime? birthday;
+    try {
+      birthday = DateFormat('MM/dd/yyyy').parse(_birthdayController.text);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Invalid date format! Please use MM/DD/YYYY.';
+      });
+      return;
+    }
+
+    // Validate age
+    int age = _calculateAge(birthday);
+    if (age < 18 || age > 50) {
+      setState(() {
+        _errorMessage = 'Age must be between 18 and 50 years.';
       });
       return;
     }
@@ -77,12 +127,27 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
     );
   }
 
+  /// Helper function to calculate the age from a birth date
+  int _calculateAge(DateTime birthDate) {
+    DateTime currentDate = DateTime.now();
+    int age = currentDate.year - birthDate.year;
+
+    // Adjust age if the birth date hasn't yet occurred this year
+    if (currentDate.month < birthDate.month ||
+        (currentDate.month == birthDate.month &&
+            currentDate.day < birthDate.day)) {
+      age--;
+    }
+
+    return age;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -220,22 +285,9 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                       width: 300,
                       child: TextField(
                         controller: _birthdayController,
-                        keyboardType: TextInputType.datetime,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d/]')),
-                          LengthLimitingTextInputFormatter(10),
-                          TextInputFormatter.withFunction((oldValue, newValue) {
-                            final text = newValue.text;
-                            if (text.length == 2 || text.length == 5) {
-                              return TextEditingValue(
-                                text: '$text/',
-                                selection: TextSelection.collapsed(
-                                    offset: text.length + 1),
-                              );
-                            }
-                            return newValue;
-                          }),
-                        ],
+                        readOnly: true, // Make the TextField read-only
+                        onTap: () => _selectDate(
+                            context), // Show the date picker when tapped
                         decoration: InputDecoration(
                           labelText: "Birthday",
                           labelStyle: const TextStyle(
@@ -245,12 +297,14 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                           border: const UnderlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.calendar_today),
-                            onPressed: () => _selectDate(context),
+                            onPressed: () => _selectDate(
+                                context), // Show the date picker when the icon is pressed
                           ),
                           hintText: 'mm/dd/yyyy',
                         ),
                       ),
                     ),
+
                     // Dropdown for Year
                     SizedBox(
                       width: 300,
@@ -295,7 +349,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "NEXT",

@@ -1,33 +1,77 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:math';
 
 class MembersModel {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Define mappings for year, program, and college
-  final Map<String, int> yearMapping = {
-    '1st Year': 1,
-    '2nd Year': 2,
-    '3rd Year': 3,
-    '4th Year': 4,
-  };
+  Future<Map<String, List<Map<String, String>>>>
+      getFriendsAndSuggestedPeers() async {
+    final user = _auth.currentUser;
+    final uid = user?.uid;
+    Map<String, List<Map<String, String>>> members = {
+      'friends': [],
+      'peers': []
+    };
 
-  final Map<String, int> programMapping = {
-    'Computer Science': 1,
-    'Information Technology': 2,
-    'Engineering': 3,
-    'Business': 4,
-    // Add more programs as needed
-  };
+    if (uid == null) return members;
 
-  final Map<String, int> collegeMapping = {
-    'College of Science': 1,
-    'College of Engineering': 2,
-    'College of Business': 3,
-    'College of Arts': 4,
-    // Add more colleges as needed
-  };
+    // Fetch friends data, excluding the current user from the results
+    final friendsQuery = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('friends')
+        .get();
+
+    if (friendsQuery.docs.isNotEmpty) {
+      members['friends'] =
+          friendsQuery.docs.where((doc) => doc.id != uid).map((doc) {
+        String fullName =
+            "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}";
+        return {'uid': doc.id, 'name': fullName};
+      }).toList();
+    }
+
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final userData = userDoc.data();
+
+    if (userData != null) {
+      final peerQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('college', isEqualTo: userData['college'])
+          .where('year', isEqualTo: userData['year'])
+          .where('program', isEqualTo: userData['program'])
+          .get();
+
+      List<Map<String, dynamic>> peers =
+          peerQuery.docs.where((doc) => doc.id != uid).map((doc) {
+        return {
+          'uid': doc.id,
+          'name':
+              "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}",
+          'year': doc['year'],
+          'program': doc['program'],
+          'college': doc['college'],
+        };
+      }).toList();
+
+      // Apply K-means clustering to peers
+      if (peers.isNotEmpty) {
+        List<List<Map<String, dynamic>>> clusteredPeers =
+            kMeansClustering(peers, 3); // Example with k=3 clusters
+        members['peers'] = clusteredPeers.expand((x) => x).map((peer) {
+          // Convert the peer map to a Map<String, String>
+          return {
+            'uid': peer['uid'] as String, // Ensure this is a String
+            'name': peer['name'] as String, // Ensure this is a String
+          };
+        }).toList();
+      }
+    }
+
+    return members;
+  }
 
   // K-means clustering algorithm
   List<List<Map<String, dynamic>>> kMeansClustering(
@@ -149,73 +193,27 @@ class MembersModel {
     return different;
   }
 
-  Future<Map<String, List<Map<String, String>>>>
-      getFriendsAndSuggestedPeers() async {
-    final user = _auth.currentUser;
-    final uid = user?.uid;
-    Map<String, List<Map<String, String>>> members = {
-      'friends': [],
-      'peers': []
-    };
+  final Map<String, int> yearMapping = {
+    '1st Year': 1,
+    '2nd Year': 2,
+    '3rd Year': 3,
+    '4th Year': 4,
+    '5th Year': 5
+  };
 
-    if (uid == null) return members;
+  final Map<String, int> programMapping = {
+    'Computer Science': 1,
+    'Information Technology': 2,
+    'Engineering': 3,
+    'Business': 4,
+    // Add more programs as needed
+  };
 
-    // Fetch friends data, excluding the current user from the results
-    final friendsQuery = await FirebaseFirestore.instance
-        .collection('friends')
-        .doc(uid)
-        .collection('friends')
-        .get();
-
-    if (friendsQuery.docs.isNotEmpty) {
-      members['friends'] =
-          friendsQuery.docs.where((doc) => doc.id != uid).map((doc) {
-        String fullName =
-            "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}";
-        return {'uid': doc.id, 'name': fullName};
-      }).toList();
-    }
-
-    if (members['friends']!.isEmpty) {
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final userData = userDoc.data();
-
-      if (userData != null) {
-        final peerQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('college', isEqualTo: userData['college'])
-            .where('year', isEqualTo: userData['year'])
-            .where('program', isEqualTo: userData['program'])
-            .get();
-
-        List<Map<String, dynamic>> peers =
-            peerQuery.docs.where((doc) => doc.id != uid).map((doc) {
-          return {
-            'uid': doc.id,
-            'name':
-                "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}",
-            'year': doc['year'],
-            'program': doc['program'],
-            'college': doc['college'],
-          };
-        }).toList();
-
-        // Apply K-means clustering to peers
-        if (peers.isNotEmpty) {
-          List<List<Map<String, dynamic>>> clusteredPeers =
-              kMeansClustering(peers, 3); // Example with k=3 clusters
-          members['peers'] = clusteredPeers.expand((x) => x).map((peer) {
-            // Convert the peer map to a Map<String, String>
-            return {
-              'uid': peer['uid'] as String, // Ensure this is a String
-              'name': peer['name'] as String, // Ensure this is a String
-            };
-          }).toList();
-        }
-      }
-    }
-
-    return members;
-  }
+  final Map<String, int> collegeMapping = {
+    'College of Science': 1,
+    'College of Engineering': 2,
+    'College of Business': 3,
+    'College of Arts': 4,
+    // Add more colleges as needed
+  };
 }

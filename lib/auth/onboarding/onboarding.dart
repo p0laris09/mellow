@@ -8,21 +8,28 @@ class OnboardingPage extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: <Widget>[
-          // Top image placeholder
+          // Top section with the image
           Expanded(
             child: Container(
-              color: Colors.grey[200], // Placeholder for the top image
+              color: const Color(
+                  0xFF2275AA), // Background color for the image area
+              child: Center(
+                child: Image.asset(
+                  'assets/img/onboarding.png', // Replace with your image asset path
+                  height: 400, // Adjust height as needed
+                ),
+              ),
             ),
           ),
           // Bottom section with title, description, and buttons
           Container(
             padding: const EdgeInsets.all(20),
-            color: const Color(
-                0xFF2C3C3C), // Dark background color for the bottom section
+            color:
+                const Color(0xFF2275AA), // Background color for bottom section
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                // Title Text
+                // Title
                 const Text(
                   "Mellow",
                   style: TextStyle(
@@ -32,13 +39,13 @@ class OnboardingPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Subtitle Text
-                Text(
-                  "The new Task Manager App that will help students handle their tasks and manage their time better.",
+                // Subtitle
+                const Text(
+                  "The new Task Manager App that will help students handle their tasks and manage their time better where they can collaborate with friends and peers.",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[300],
+                    color: Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -48,13 +55,15 @@ class OnboardingPage extends StatelessWidget {
                     Navigator.pushNamed(context, '/signin');
                   },
                   style: ElevatedButton.styleFrom(
-                    foregroundColor: const Color(0xFF2C3C3C),
-                    backgroundColor: Colors.grey[200], // Text color
+                    foregroundColor: const Color(0xFF2275AA),
+                    backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), // Rounded edges
+                      borderRadius: BorderRadius.circular(30),
                     ),
                     padding: const EdgeInsets.symmetric(
-                        vertical: 15, horizontal: 80),
+                      vertical: 15,
+                      horizontal: 80,
+                    ),
                   ),
                   child: const Text(
                     "SIGN IN",
@@ -73,10 +82,12 @@ class OnboardingPage extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.white),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), // Rounded edges
+                      borderRadius: BorderRadius.circular(30),
                     ),
                     padding: const EdgeInsets.symmetric(
-                        vertical: 15, horizontal: 80),
+                      vertical: 15,
+                      horizontal: 80,
+                    ),
                   ),
                   child: const Text(
                     "SIGN UP",

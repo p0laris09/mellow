@@ -26,17 +26,16 @@ class TaskManager {
       tasks = querySnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data();
         Task task = Task(
-          userId: data['userId'],
-          taskName: data['taskName'],
-          dueDate: (data['dueDate'] as Timestamp).toDate(),
-          startTime: (data['startTime'] as Timestamp).toDate(),
-          endTime: (data['endTime'] as Timestamp).toDate(),
-          description: data['description'] ?? '',
-          priority: data['priority'] ?? 1.0,
-          urgency: data['urgency'] ?? 1.0,
-          importance: data['importance'] ?? 1.0,
-          complexity: data['complexity'] ?? 1.0,
-        );
+            userId: data['userId'],
+            taskName: data['taskName'],
+            dueDate: (data['dueDate'] as Timestamp).toDate(),
+            startTime: (data['startTime'] as Timestamp).toDate(),
+            endTime: (data['endTime'] as Timestamp).toDate(),
+            description: data['description'] ?? '',
+            priority: data['priority'] ?? 1.0,
+            urgency: data['urgency'] ?? 1.0,
+            complexity: data['complexity'] ?? 1.0,
+            taskType: data['tasktype']);
         task.updateWeight(criteriaWeights); // Pass criteriaWeights
         return task;
       }).toList();
@@ -244,10 +243,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   final TextEditingController _endTimeController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
+// This will be automatically set as 'personal' for personal tasks
+  String taskType = 'personal';
+
   int _descriptionCharCount = 0;
   double _priority = 1;
   double _urgency = 1;
-  double _importance = 1;
   double _complexity = 1;
 
   @override
@@ -269,12 +270,38 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       initialDate: now,
       firstDate: now, // Prevent picking past dates
       lastDate: DateTime(2101),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor:
+                const Color(0xFF2275AA), // Match the page primary color
+            hintColor: const Color(0xFF2275AA), // Match the page accent color
+            colorScheme: ColorScheme.light(primary: const Color(0xFF2275AA)),
+            buttonTheme:
+                const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (pickedDate != null) {
       TimeOfDay? pickedTime = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
+        builder: (BuildContext context, Widget? child) {
+          return Theme(
+            data: ThemeData.light().copyWith(
+              primaryColor:
+                  const Color(0xFF2275AA), // Match the page primary color
+              hintColor: const Color(0xFF2275AA), // Match the page accent color
+              colorScheme: const ColorScheme.light(primary: Color(0xFF2275AA)),
+              buttonTheme:
+                  const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+            ),
+            child: child!,
+          );
+        },
       );
 
       if (pickedTime != null) {
@@ -325,6 +352,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
         : null;
 
+    // Define the taskType (personal, duo, or space)
+    String taskType =
+        'personal'; // Set to 'personal' by default, you can change it based on user input
+
     if (taskName.isNotEmpty &&
         dueDate != null &&
         startTime != null &&
@@ -339,22 +370,21 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         description: description,
         priority: _priority,
         urgency: _urgency,
-        importance: _importance,
         complexity: _complexity,
+        taskType: taskType, // Add the taskType here
       );
 
       // Initialize the TaskManager
       TaskManager taskManager = TaskManager();
 
-// Define criteriaWeights
+      // Define criteriaWeights
       Map<String, double> criteriaWeights = {
         'priority': _priority,
         'urgency': _urgency,
-        'importance': _importance,
         'complexity': _complexity,
       };
 
-// Pass both userId and criteriaWeights when calling loadTasksFromFirestore
+      // Pass both userId and criteriaWeights when calling loadTasksFromFirestore
       await taskManager.loadTasksFromFirestore(userId, criteriaWeights);
 
       double weightLimit = 12.1; // Example weight limit
@@ -374,12 +404,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
             'description': description,
             'priority': _priority,
             'urgency': _urgency,
-            'importance': _importance,
             'complexity': _complexity,
             'weight': resolvedTask.weight,
             'createdAt': Timestamp.now(),
             'userId': userId,
             'status': 'pending',
+            'taskType': taskType, // Add the taskType here in Firestore
           });
 
           // Show success message and close the screen
@@ -401,9 +431,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -454,26 +484,34 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                   const SizedBox(height: 9),
                   SizedBox(
                     width: 300,
-                    child: TextField(
-                      controller: _dueDateController,
-                      readOnly: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: "Due Date",
-                        labelStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                    child: GestureDetector(
+                      onTap: () {
+                        // Open the date picker when the field is tapped
+                        _selectDateTime(context, _dueDateController);
+                      },
+                      child: AbsorbPointer(
+                        child: TextField(
+                          controller: _dueDateController,
+                          readOnly: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: "Due Date",
+                            labelStyle: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            border: const UnderlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.calendar_today,
+                                  color: Colors.white),
+                              onPressed: () {
+                                _selectDateTime(context, _dueDateController);
+                              },
+                            ),
+                            hintText: 'yyyy-mm-dd hh:mm',
+                            hintStyle: const TextStyle(color: Colors.white54),
+                          ),
                         ),
-                        border: const UnderlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.calendar_today,
-                              color: Colors.white),
-                          onPressed: () {
-                            _selectDateTime(context, _dueDateController);
-                          },
-                        ),
-                        hintText: 'yyyy-mm-dd hh:mm',
-                        hintStyle: const TextStyle(color: Colors.white54),
                       ),
                     ),
                   ),
@@ -482,10 +520,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
             ),
             const SizedBox(height: 45),
             SizedBox(
-              height: 810,
+              height: 720,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 32,
+                  horizontal: 16,
+                ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -501,51 +541,68 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       children: [
                         SizedBox(
                           width: 150,
-                          child: TextField(
-                            controller: _startTimeController,
-                            readOnly: true,
-                            style: const TextStyle(color: Colors.black),
-                            decoration: InputDecoration(
-                              labelText: "Start Time",
-                              labelStyle: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
+                          child: GestureDetector(
+                            onTap: () {
+                              // Open the time picker when the field is tapped
+                              _selectDateTime(context, _startTimeController);
+                            },
+                            child: AbsorbPointer(
+                              child: TextField(
+                                controller: _startTimeController,
+                                readOnly: true,
+                                style: const TextStyle(color: Colors.black),
+                                decoration: InputDecoration(
+                                  labelText: "Start Time",
+                                  labelStyle: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  border: const UnderlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.access_time,
+                                        color: Colors.black),
+                                    onPressed: () {
+                                      _selectDateTime(
+                                          context, _startTimeController);
+                                    },
+                                  ),
+                                  hintText: 'hh:mm',
+                                ),
                               ),
-                              border: const UnderlineInputBorder(),
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.access_time,
-                                    color: Colors.black),
-                                onPressed: () {
-                                  _selectDateTime(
-                                      context, _startTimeController);
-                                },
-                              ),
-                              hintText: 'hh:mm',
                             ),
                           ),
                         ),
                         const SizedBox(width: 25),
                         SizedBox(
                           width: 150,
-                          child: TextField(
-                            controller: _endTimeController,
-                            readOnly: true,
-                            style: const TextStyle(color: Colors.black),
-                            decoration: InputDecoration(
-                              labelText: "End Time",
-                              labelStyle: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
+                          child: GestureDetector(
+                            onTap: () {
+                              // Open the time picker when the field is tapped
+                              _selectDateTime(context, _endTimeController);
+                            },
+                            child: AbsorbPointer(
+                              child: TextField(
+                                controller: _endTimeController,
+                                readOnly: true,
+                                style: const TextStyle(color: Colors.black),
+                                decoration: InputDecoration(
+                                  labelText: "End Time",
+                                  labelStyle: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  border: const UnderlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.access_time,
+                                        color: Colors.black),
+                                    onPressed: () {
+                                      _selectDateTime(
+                                          context, _endTimeController);
+                                    },
+                                  ),
+                                  hintText: 'hh:mm',
+                                ),
                               ),
-                              border: const UnderlineInputBorder(),
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.access_time,
-                                    color: Colors.black),
-                                onPressed: () {
-                                  _selectDateTime(context, _endTimeController);
-                                },
-                              ),
-                              hintText: 'hh:mm',
                             ),
                           ),
                         ),
@@ -585,12 +642,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       });
                     }),
                     const SizedBox(height: 15),
-                    _buildSlider("Importance", _importance, (value) {
-                      setState(() {
-                        _importance = value;
-                      });
-                    }),
-                    const SizedBox(height: 15),
                     _buildSlider("Complexity", _complexity, (value) {
                       setState(() {
                         _complexity = value;
@@ -606,7 +657,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                             vertical: 20,
                           ),
                           foregroundColor: Colors.white,
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text('Create Task'),
                       ),
@@ -628,14 +679,26 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black), // Set header text color to black
         ),
         const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Low', style: TextStyle(fontSize: 12)),
-            Text('Medium', style: TextStyle(fontSize: 12)),
-            Text('High', style: TextStyle(fontSize: 12)),
+            Text('Low',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
+            Text('Medium',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
+            Text('High',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
           ],
         ),
         Slider(
@@ -649,6 +712,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                   ? 'Medium'
                   : 'High',
           onChanged: onChanged,
+          activeColor: const Color(0xFF2275AA), // Set active color to blue
+          inactiveColor:
+              const Color(0xFFB0C4DE), // Set inactive color to light blue
         ),
       ],
     );

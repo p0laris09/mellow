@@ -38,18 +38,29 @@ class _SignInPageState extends State<SignInPage> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+
       // Retrieve the User object
       User? user = userCredential.user;
 
-      // Navigate to HomeScreen (no uid passed)
       if (user != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                const DashboardScreen(), // No need to pass uid
-          ),
-        );
+        // Check if the email is verified
+        if (user.emailVerified) {
+          // Navigate to the regular DashboardScreen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const DashboardScreen(),
+            ),
+          );
+        } else {
+          // Sign out the user
+          await FirebaseAuth.instance.signOut();
+
+          // Show error message
+          setState(() {
+            _errorMessage = 'Please verify your email before signing in.';
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -63,9 +74,9 @@ class _SignInPageState extends State<SignInPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          const Color(0xFF2C3C3C), // Matches the dark greenish background
+          const Color(0xFF2275AA), // Matches the dark greenish background
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C), // Matches background color
+        backgroundColor: const Color(0xFF2275AA), // Matches background color
         elevation: 0, // Remove shadow under AppBar
         leading: IconButton(
           icon: const Icon(Icons.arrow_back,
@@ -230,7 +241,7 @@ class _SignInPageState extends State<SignInPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "SIGN IN",

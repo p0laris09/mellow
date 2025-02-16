@@ -134,14 +134,23 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        centerTitle: true,
         title: const Text(
           'Notifications Page',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ),
@@ -186,7 +195,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                     child: const Text('Accept'),
                                     style: TextButton.styleFrom(
                                       foregroundColor: Colors.white,
-                                      backgroundColor: const Color(0xFF2C3C3C),
+                                      backgroundColor: const Color(0xFF2275AA),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -225,7 +234,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       },
       style: TextButton.styleFrom(
         backgroundColor: selectedFilter == label
-            ? const Color(0xFF2C3C3C)
+            ? const Color(0xFF2275AA)
             : Colors.grey[300],
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),

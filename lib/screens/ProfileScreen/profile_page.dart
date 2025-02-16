@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
-import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -23,88 +24,90 @@ class _ProfilePageState extends State<ProfilePage> {
   int friendsCount = 0;
   int spaceCount = 0;
 
+  // Task category counts
+  int overdueCount = 0;
+  int pendingCount = 0;
+  int ongoingCount = 0;
+  int finishedCount = 0;
+
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _fetchAnalyticsData(); // Fetch overall analytics data
   }
 
   Future<void> _loadUserProfile() async {
-    final profileImageProvider =
-        Provider.of<ProfileImageProvider>(context, listen: false);
-    User? user = FirebaseAuth.instance.currentUser;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = userDoc.data();
 
-    if (user != null) {
-      try {
-        String userId = user.uid;
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .get();
+    if (data != null) {
+      String imageUrl = data['profileImageUrl'] ?? '';
+      if (imageUrl.isEmpty) {
+        // Fetch default profile image from Firebase Storage
+        final defaultImageRef = FirebaseStorage.instance
+            .ref()
+            .child('default_images/default_profile.png');
+        imageUrl = await defaultImageRef.getDownloadURL();
+      }
 
-        if (userDoc.exists) {
-          // Update user details and fetch profile image
-          await profileImageProvider.fetchProfileImage(user);
-          setState(() {
-            userName =
-                '${userDoc['firstName']} ${userDoc['lastName']}'.toUpperCase();
-            userSection = userDoc['section'];
-            college = userDoc['college'];
-            program = userDoc['program'];
-            year = userDoc['year'];
-            profileImageUrl =
-                profileImageProvider.profileImageUrl?.isNotEmpty == true
-                    ? profileImageProvider.profileImageUrl!
-                    : 'assets/img/default_profile.png';
-          });
-        }
+      setState(() {
+        userName = data['firstName'] ?? 'Loading...';
+        profileImageUrl = imageUrl;
+        userSection = data['section'] ?? 'Loading...';
+        college = data['college'] ?? 'Loading...';
+        program = data['program'] ?? 'Loading...';
+        year = data['year'] ?? 'Loading...';
+        tasksCount = data['tasksCount'] ?? 0;
+        friendsCount = data['friendsCount'] ?? 0;
+        spaceCount = data['spaceCount'] ?? 0;
+        isLoading = false;
+      });
+    }
+  }
 
-        // Fetch tasks, friends, and space counts in parallel
-        final tasksFuture = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('tasks')
-            .get();
-        final friendsAsReceiverFuture = FirebaseFirestore.instance
-            .collection('friends_request')
-            .where('status', isEqualTo: 'accepted')
-            .where('toUserId', isEqualTo: userId)
-            .get();
-        final friendsAsSenderFuture = FirebaseFirestore.instance
-            .collection('friends_request')
-            .where('status', isEqualTo: 'accepted')
-            .where('fromUserId', isEqualTo: userId)
-            .get();
-        final spaceFuture = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('space')
-            .get();
+  Future<void> _fetchAnalyticsData() async {
+    final firestore = FirebaseFirestore.instance;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-        // Await all futures and update counts in one `setState`
-        final results = await Future.wait([
-          tasksFuture,
-          friendsAsReceiverFuture,
-          friendsAsSenderFuture,
-          spaceFuture,
-        ]);
+    int overdueTasks = 0;
+    int pendingTasks = 0;
+    int ongoingTasks = 0;
+    int finishedTasks = 0;
 
-        setState(() {
-          tasksCount = results[0].size;
-          friendsCount = results[1].size + results[2].size;
-          spaceCount = results[3].size;
-          isLoading = false;
-        });
-      } catch (e) {
-        print('Error loading user profile: $e');
-        setState(() {
-          tasksCount = 0;
-          friendsCount = 0;
-          spaceCount = 0;
-          isLoading = false;
-        });
+    final tasksQuery = await firestore
+        .collection('tasks')
+        .where('userId', isEqualTo: uid)
+        .get();
+
+    for (var doc in tasksQuery.docs) {
+      final data = doc.data();
+      final status = data['status'] ?? '';
+      final dueDate =
+          (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+      if (dueDate.isBefore(DateTime.now()) && status != 'Finished') {
+        overdueTasks++;
+      } else if (status == 'pending') {
+        pendingTasks++;
+      } else if (status == 'ongoing') {
+        ongoingTasks++;
+      } else if (status == 'Finished') {
+        finishedTasks++;
       }
     }
+
+    setState(() {
+      overdueCount = overdueTasks;
+      pendingCount = pendingTasks;
+      ongoingCount = ongoingTasks;
+      finishedCount = finishedTasks;
+
+      // Update total task count
+      tasksCount = tasksQuery.docs.length;
+    });
   }
 
   @override
@@ -123,9 +126,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         CircleAvatar(
                           radius: 40,
-                          backgroundImage: profileImageUrl.startsWith('http')
+                          backgroundImage: profileImageUrl.isNotEmpty
                               ? NetworkImage(profileImageUrl)
-                              : AssetImage(profileImageUrl) as ImageProvider,
+                              : null,
                           child: profileImageUrl.isEmpty
                               ? const Icon(Icons.person, size: 40)
                               : null,
@@ -174,15 +177,44 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      height: 610,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 32, horizontal: 16),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                        ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
                       ),
+                      itemCount: 4,
+                      itemBuilder: (context, index) {
+                        return Card(
+                          elevation: 5,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _getTaskCategoryLabel(index),
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _getTaskCategoryCount(index).toString(),
+                                  style: const TextStyle(fontSize: 36),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -202,7 +234,7 @@ class _ProfilePageState extends State<ProfilePage> {
           Icons.person_add,
           color: Colors.white,
         ),
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
       ),
     );
   }
@@ -221,9 +253,39 @@ class _ProfilePageState extends State<ProfilePage> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(color: Colors.grey),
+          style: const TextStyle(color: Colors.black87),
         ),
       ],
     );
+  }
+
+  String _getTaskCategoryLabel(int index) {
+    switch (index) {
+      case 0:
+        return 'Overdue Tasks';
+      case 1:
+        return 'Ongoing Tasks';
+      case 2:
+        return 'Pending Tasks';
+      case 3:
+        return 'Finished Tasks';
+      default:
+        return '';
+    }
+  }
+
+  int _getTaskCategoryCount(int index) {
+    switch (index) {
+      case 0:
+        return overdueCount;
+      case 1:
+        return ongoingCount;
+      case 2:
+        return pendingCount;
+      case 3:
+        return finishedCount;
+      default:
+        return 0;
+    }
   }
 }

@@ -23,6 +23,12 @@ dependencies:
   permission_handler: ^11.3.1
   timezone: ^0.9.4
   fl_chart: ^0.69.0
+  crypto: ^3.0.6
+  encrypt: ^5.0.3
+  flutter_datetime_picker: ^1.5.1
+  uuid: ^4.5.1
+  lucide_icons: ^0.257.0
+  image_cropper: ^9.0.0
     
 
 dev_dependencies:
@@ -38,4 +44,8 @@ flutter:
     - assets/img/app_icon.png
     - assets/img/default_profile.png
     - assets/img/default_banner.png
+    - assets/img/onboarding.png
+    - assets/img/collaborate.png
+    - assets/img/organize.png
+    - assets/img/reminders.png
 

@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mellow/auth/auth_page.dart';
 import 'package:mellow/auth/forgotpassword/fp_emailsent.dart';
 import 'package:mellow/auth/signin/sign_in.dart';
+import 'package:mellow/auth/signup/sign_up_email_verification.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/provider/BannerImageProvider/banner_image_provider.dart';
 import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
@@ -16,10 +17,13 @@ import 'package:mellow/screens/ProfileScreen/profile_page.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateEmail/email_update.dart';
 import 'package:mellow/screens/SettingsScreen/ChangePassword/change_password.dart';
 import 'package:mellow/screens/SettingsScreen/PrivacyPolicy/privacy_policy.dart';
+import 'package:mellow/screens/SettingsScreen/ReportBugs/reportbugs_screen.dart';
+import 'package:mellow/screens/SettingsScreen/SendFeedbackScreen/sendfeedback_screen.dart';
 import 'package:mellow/screens/SettingsScreen/TermsOfService/terms_of_service.dart';
 import 'package:mellow/screens/SettingsScreen/settings_drawer.dart';
 import 'package:mellow/screens/SettingsScreen/settings_page.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
+import 'package:mellow/screens/TaskManagement/TaskHistory/task_history.dart';
 import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:provider/provider.dart';
 import 'package:workmanager/workmanager.dart';
@@ -114,6 +118,7 @@ class MellowApp extends StatelessWidget {
           const AuthPage(), // This will be replaced by the splash screen initially
       routes: {
         '/signin': (context) => const SignInPage(),
+        '/emailVerification': (context) => EmailVerification(),
         '/signup': (context) => const SignUpPersonalDetails(),
         '/dashboard': (context) {
           User? user = FirebaseAuth.instance.currentUser;
@@ -136,6 +141,9 @@ class MellowApp extends StatelessWidget {
         '/change_password': (context) => const ChangePassword(),
         '/search_friends': (context) => const SearchFriends(),
         '/messages': (context) => const MessageScreen(),
+        '/sendfeedback': (context) => const SendfeedbackScreen(),
+        '/reportbugs': (context) => const ReportBugsScreen(),
+        '/taskhistory': (context) => const TaskHistory(),
       },
     );
   }

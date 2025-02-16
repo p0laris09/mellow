@@ -7,9 +7,9 @@ class Task {
   String description;
   double priority;
   double urgency;
-  double importance;
   double complexity;
   double weight = 0.0;
+  String taskType; // New field for task type
 
   Task({
     required this.userId,
@@ -20,26 +20,21 @@ class Task {
     this.description = '',
     this.priority = 0.0,
     this.urgency = 0.0,
-    this.importance = 0.0,
     this.complexity = 0.0,
+    required this.taskType, // Initialize the taskType field
   }) : weight = 0.0; // Initialize weight
 
   // Calculate and update the task's weight based on criteria weights
   void updateWeight(Map<String, double> criteriaWeights) {
     priority = (priority / 3.0).clamp(0.0, 1.0);
     urgency = (urgency / 3.0).clamp(0.0, 1.0);
-    importance = (importance / 3.0).clamp(0.0, 1.0);
     complexity = (complexity / 3.0).clamp(0.0, 1.0);
 
     double weightedPriority = priority * criteriaWeights['priority']!;
     double weightedUrgency = urgency * criteriaWeights['urgency']!;
-    double weightedImportance = importance * criteriaWeights['importance']!;
     double weightedComplexity = complexity * criteriaWeights['complexity']!;
 
-    weight = weightedPriority +
-        weightedUrgency +
-        weightedImportance +
-        weightedComplexity;
+    weight = weightedPriority + weightedUrgency + weightedComplexity;
 
     // Debugging: Print updated weight
     print("Updated Task Weight for '${taskName}': $weight");
@@ -56,11 +51,24 @@ class Task {
         endTime.isAfter(other.startTime);
   }
 
+  // Classify the task using the Eisenhower Matrix
+  String categorizeUsingEisenhowerMatrix() {
+    if (urgency > 0.5 && complexity > 0.5) {
+      return 'Quadrant I (Urgent and Important)'; // Do first
+    } else if (urgency <= 0.5 && complexity > 0.5) {
+      return 'Quadrant II (Not Urgent but Important)'; // Schedule
+    } else if (urgency > 0.5 && complexity <= 0.5) {
+      return 'Quadrant III (Urgent but Not Important)'; // Delegate
+    } else {
+      return 'Quadrant IV (Not Urgent and Not Important)'; // Eliminate
+    }
+  }
+
   @override
   String toString() {
-    return 'Task(taskName: $taskName, dueDate: $dueDate, startTime: $startTime, '
+    return 'Task(taskName: $taskName, taskType: $taskType, dueDate: $dueDate, startTime: $startTime, '
         'endTime: $endTime, priority: $priority, urgency: $urgency, '
-        'importance: $importance, complexity: $complexity, weight: $weight)';
+        'complexity: $complexity, weight: $weight)';
   }
 }
 
@@ -70,8 +78,7 @@ class TaskManager {
   Map<String, double> criteriaWeights = {
     'priority': 0.4,
     'urgency': 0.3,
-    'importance': 0.2,
-    'complexity': 0.1,
+    'complexity': 0.3, // Adjusted for complexity without importance
   };
 
   final double weightLimit = 60.0;
@@ -207,7 +214,8 @@ class TaskManager {
 
     print('Optimized tasks prioritized for $time:');
     for (var task in optimizedTasks) {
-      print('${task.taskName} - Weight: ${task.weight}');
+      print(
+          '${task.taskName} - Weight: ${task.weight} - Category: ${task.categorizeUsingEisenhowerMatrix()}');
     }
   }
 
@@ -247,7 +255,7 @@ class TaskManager {
     }
   }
 
-// Suggest alternative times for a conflicting task based on weight limits
+  // Suggest alternative times for a conflicting task based on weight limits
   List<DateTime> suggestAlternativeTimes(Task task, int numSuggestions) {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
@@ -272,8 +280,8 @@ class TaskManager {
         endTime: proposedEnd,
         priority: task.priority,
         urgency: task.urgency,
-        importance: task.importance,
         complexity: task.complexity,
+        taskType: task.taskType,
       ));
 
       if (withinWeightLimit) {

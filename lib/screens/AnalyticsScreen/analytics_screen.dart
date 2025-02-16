@@ -1,219 +1,327 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
 
-  Future<Map<String, List<FlSpot>>> _fetchDailyTaskData() async {
+  @override
+  _AnalyticsScreenState createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  int selectedPeriod = 7; // Default to 7 days
+
+  Future<Map<String, dynamic>> _fetchAnalyticsData() async {
     final firestore = FirebaseFirestore.instance;
     final now = DateTime.now();
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    // Define task statuses
-    final statuses = ["pending", "overdue", "finished", "ongoing"];
-    final taskData = {
-      "pending": <FlSpot>[],
-      "overdue": <FlSpot>[],
-      "finished": <FlSpot>[],
-      "ongoing": <FlSpot>[],
-    };
+    final daysWithMostTasks =
+        <Map<String, dynamic>>[]; // Tracks the number of tasks per day
+    final tasksWithMostWeight =
+        <Map<String, dynamic>>[]; // Tracks tasks with the most weight
 
-    // Fetch task data for the last 5 days
-    for (int i = 0; i < 5; i++) {
-      final day = now.subtract(Duration(days: i));
+    double totalWeightSum = 0.0; // Ensure total weight sum starts at 0
+    double totalTasksSum =
+        0.0; // Not used directly in the code, but initialized
+
+    int overdueTasks = 0;
+    int pendingTasks = 0;
+    int ongoingTasks = 0;
+    int finishedTasks = 0;
+
+    // Fetch all tasks for the user to get the overall task count
+    final allTasksQuery = await firestore
+        .collection('tasks')
+        .where('userId', isEqualTo: uid)
+        .get();
+
+    final overallTaskCount = allTasksQuery.docs.length; // Total tasks
+
+    // Filter tasks based on the selected period
+    final startDate = now.subtract(Duration(days: selectedPeriod));
+
+    for (int i = 0; i < selectedPeriod; i++) {
+      final day = startDate.add(Duration(days: i));
       final dayStart = DateTime(day.year, day.month, day.day);
+      final dayEnd = dayStart.add(const Duration(days: 1));
+      final label = DateFormat('MMM dd').format(day);
 
-      for (String status in statuses) {
-        final query = await firestore
-            .collection('tasks')
-            .where('status', isEqualTo: status)
-            .where('createdAt', isGreaterThanOrEqualTo: dayStart)
-            .where('createdAt', isLessThan: dayStart.add(Duration(days: 1)))
-            .get();
+      final query = await firestore
+          .collection('tasks')
+          .where('userId', isEqualTo: uid)
+          .where('startTime',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+          .where('startTime', isLessThan: Timestamp.fromDate(dayEnd))
+          .get();
 
-        // Add the task count to the appropriate list for the line chart
-        taskData[status]
-            ?.add(FlSpot(4 - i.toDouble(), query.docs.length.toDouble()));
+      final totalTasks = query.docs.length;
+
+      if (totalTasks > 0) {
+        daysWithMostTasks.add({'date': label, 'tasks': totalTasks});
+      }
+
+      for (var doc in query.docs) {
+        final data = doc.data();
+        final priority = data['priority'] ?? 0;
+        final urgency = data['urgency'] ?? 0;
+        final importance = data['importance'] ?? 0;
+        final complexity = data['complexity'] ?? 0;
+
+        final weight = priority + urgency + importance + complexity;
+
+        totalWeightSum += weight; // Add valid weight to the total sum
+
+        // Determine task status and color
+        String status = data['status'] ?? 'pending';
+        Color statusColor;
+
+        // Get the due date of the task
+        final dueDate = (data['dueDate'] as Timestamp?)?.toDate() ?? now;
+
+        // Check if the due date has passed and the task isn't finished
+        if (dueDate.isBefore(now) && status != 'Finished') {
+          status = 'overdue'; // Dynamically set status to overdue
+        }
+
+        // Update task count based on status
+        if (status == 'Finished') {
+          statusColor = Colors.green; // Finished -> Green
+          finishedTasks++;
+        } else if (status == 'ongoing') {
+          statusColor =
+              const Color.fromARGB(255, 33, 150, 243); // Ongoing -> Blue
+          ongoingTasks++;
+        } else if (status == 'overdue') {
+          statusColor = Colors.red; // Overdue -> Red
+          overdueTasks++;
+        } else {
+          statusColor = Colors.grey; // Pending -> Grey
+          pendingTasks++;
+        }
+
+        final taskName = data['taskName'] ?? 'Unnamed Task';
+
+        tasksWithMostWeight.add({
+          'name': taskName,
+          'weight': weight,
+          'statusColor': statusColor,
+          'status': status,
+        });
       }
     }
 
-    return taskData;
+    // Sort days and tasks by most tasks/weight and limit to top 5
+    daysWithMostTasks.sort((a, b) => b['tasks'].compareTo(a['tasks']));
+    tasksWithMostWeight.sort((a, b) => b['weight'].compareTo(a['weight']));
+
+    return {
+      "overallTaskCount":
+          overallTaskCount, // Ensure this reflects total task count
+      "daysWithMostTasks": daysWithMostTasks.take(5).toList(),
+      "tasksWithMostWeight": tasksWithMostWeight.take(5).toList(),
+      "overdueTasks": overdueTasks,
+      "pendingTasks": pendingTasks,
+      "ongoingTasks": ongoingTasks,
+      "finishedTasks": finishedTasks,
+      "totalWeight": totalWeightSum, // Add total weight here
+    };
+  }
+
+  void _onCardTap(String cardType) {
+    // Handle card tap actions
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$cardType card tapped!')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildOverviewSection(),
-            const SizedBox(height: 20),
-            _buildTaskMetricsSection(),
-            const SizedBox(height: 20),
-            _buildUserProgressSection(),
-            const SizedBox(height: 20),
-            _buildTaskSegmentationSection(),
-          ],
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _fetchAnalyticsData(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasData) {
+              final data = snapshot.data!;
+              final daysWithMostTasks = data['daysWithMostTasks'];
+              final tasksWithMostWeight = data['tasksWithMostWeight'];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCardSection(
+                    cards: [
+                      {
+                        'title': 'Total Tasks',
+                        'color': Colors.purple,
+                        'value': data['overallTaskCount']
+                      },
+                      {
+                        'title': 'Total Weight',
+                        'color': Colors.orange,
+                        'value': data['totalWeight'].toStringAsFixed(2)
+                      },
+                      {
+                        'title': 'Overdue Tasks',
+                        'color': Colors.red,
+                        'value': data['overdueTasks']
+                      },
+                      {
+                        'title': 'Pending Tasks',
+                        'color': Colors.grey,
+                        'value': data['pendingTasks']
+                      },
+                      {
+                        'title': 'Ongoing Tasks',
+                        'color': Colors.blue,
+                        'value': data['ongoingTasks']
+                      },
+                      {
+                        'title': 'Finished Tasks',
+                        'color': Colors.green,
+                        'value': data['finishedTasks']
+                      },
+                    ],
+                  ),
+                  if (daysWithMostTasks.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _buildListSection(
+                      title: 'Days with Most Tasks',
+                      items: daysWithMostTasks,
+                      keyField: 'date',
+                      valueField: 'tasks',
+                    ),
+                  ],
+                  if (tasksWithMostWeight.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _buildListSection(
+                      title: 'Tasks with Most Weight',
+                      items: tasksWithMostWeight,
+                      keyField: 'name',
+                      valueField: 'weight',
+                      showStatusColor: true,
+                    ),
+                  ],
+                ],
+              );
+            }
+            return const Text('Error loading data.');
+          },
         ),
       ),
     );
   }
 
-  Widget _buildOverviewSection() {
-    return FutureBuilder<Map<String, List<FlSpot>>>(
-      future: _fetchDailyTaskData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasData) {
-          final taskData = snapshot.data!;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Overview",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 300,
-                child: LineChart(
-                  LineChartData(
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: taskData['pending'] ?? [],
-                        isCurved: true,
-                        barWidth: 2,
-                        color: Colors.blueAccent,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.blueAccent.withOpacity(0.2),
-                        ),
-                      ),
-                      LineChartBarData(
-                        spots: taskData['overdue'] ?? [],
-                        isCurved: true,
-                        barWidth: 2,
-                        color: Colors.redAccent,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.redAccent.withOpacity(0.2),
-                        ),
-                      ),
-                      LineChartBarData(
-                        spots: taskData['finished'] ?? [],
-                        isCurved: true,
-                        barWidth: 2,
-                        color: Colors.greenAccent,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.greenAccent.withOpacity(0.2),
-                        ),
-                      ),
-                      LineChartBarData(
-                        spots: taskData['ongoing'] ?? [],
-                        isCurved: true,
-                        barWidth: 2,
-                        color: Colors.orangeAccent,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.orangeAccent.withOpacity(0.2),
-                        ),
-                      ),
-                    ],
-                    titlesData: FlTitlesData(
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            const titles = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-                            return Text(
-                              titles[value.toInt()],
-                              style: const TextStyle(color: Colors.grey),
-                            );
-                          },
-                        ),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              '${value.toInt()}',
-                              style: const TextStyle(color: Colors.grey),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    gridData: FlGridData(show: true),
-                    borderData: FlBorderData(
-                      show: true,
-                      border: Border.all(color: Colors.grey, width: 1),
-                    ),
+  Widget _buildCardSection({required List<Map<String, dynamic>> cards}) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.5,
+      ),
+      itemCount: cards.length,
+      itemBuilder: (context, index) {
+        final card = cards[index];
+        return GestureDetector(
+          onTap: () => _onCardTap(card['title']),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: card['color'] as Color,
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: (card['color'] as Color).withOpacity(0.3),
+                  spreadRadius: 2,
+                  blurRadius: 5,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  card['title'] as String,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white70,
                   ),
                 ),
-              ),
-            ],
-          );
-        } else {
-          return const Text("Error loading data");
-        }
+                const SizedBox(height: 8),
+                Text(
+                  card['value'].toString(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }
 
-  Widget _buildTaskMetricsSection() {
-    return const Text("Placeholder for Task Metrics");
-  }
-
-  Widget _buildUserProgressSection() {
+  Widget _buildListSection({
+    required String title,
+    required List<Map<String, dynamic>> items,
+    required String keyField,
+    required String valueField,
+    bool showStatusColor = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "User Progress Insights",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          height: 150,
-          color: Colors.blueGrey.withOpacity(0.1),
-          child: const Center(
-            child: Text(
-              "Progress Over Time Visualization Here",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildTaskSegmentationSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Task Segmentation",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          height: 150,
-          color: Colors.deepPurple.withOpacity(0.1),
-          child: const Center(
-            child: Text(
-              "Task Categorization Visualization Here",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        const SizedBox(height: 8),
+        ...items.map((item) {
+          return Card(
+            color: Colors.white,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: ListTile(
+              title: Text(item[keyField].toString()),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(item[valueField].toString()),
+                  if (showStatusColor)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: item['statusColor'] as Color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        }).toList(),
       ],
     );
   }

@@ -20,6 +20,12 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
   final TextEditingController _phoneController =
       TextEditingController(text: '+63 9');
 
+  String? _selectedGender;
+  final List<String> _gender = [
+    'Male',
+    'Female',
+  ];
+
   // Phone number validation starts with +63 9 and follows by 9 digits
   bool isValidPhilippinePhoneNumber(String phoneNumber) {
     return RegExp(r'^\+63 9\d{9}$').hasMatch(phoneNumber);
@@ -47,6 +53,11 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
         _birthdayController.text = userDoc['birthday'] ?? '';
         _phoneController.text = userDoc['phoneNumber'] ?? '+63 9';
 
+        // Set initial gender dropdown value
+        setState(() {
+          _selectedGender = userDoc['gender'];
+        });
+
         // Parse birthday string into DateTime if available
         if (userDoc['birthday'] != null) {
           _selectedDate = DateFormat('MM/dd/yyyy').parse(userDoc['birthday']);
@@ -63,17 +74,33 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
   DateTime? _selectedDate;
 
   Future<void> _selectDate(BuildContext context) async {
-    DateTime currentDate = DateTime.now();
-    DateTime initialDate = _selectedDate ?? currentDate;
+    DateTime now = DateTime.now();
+    DateTime maxDate = now.subtract(Duration(days: 365 * 18)); // 18 years ago
+    DateTime minDate = now.subtract(Duration(days: 365 * 50)); // 50 years ago
 
-    final DateTime? pickedDate = await showDatePicker(
+    DateTime initialDate = now.isAfter(maxDate) ? maxDate : now;
+
+    DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: currentDate,
+      firstDate: minDate,
+      lastDate: maxDate,
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor:
+                const Color(0xFF2275AA), // Match the page primary color
+            hintColor: const Color(0xFF2275AA), // Match the page accent color
+            colorScheme: ColorScheme.light(primary: const Color(0xFF2275AA)),
+            buttonTheme:
+                const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+          ),
+          child: child!,
+        );
+      },
     );
 
-    if (pickedDate != null && pickedDate != initialDate) {
+    if (pickedDate != null) {
       setState(() {
         _selectedDate = pickedDate;
         _birthdayController.text = DateFormat('MM/dd/yyyy').format(pickedDate);
@@ -90,7 +117,8 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
     if (_phoneController.text.isEmpty ||
         _firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
-        _birthdayController.text.isEmpty) {
+        _birthdayController.text.isEmpty ||
+        _selectedGender == null) {
       setState(() {
         _errorMessage = 'Please fill in all fields!';
       });
@@ -106,6 +134,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
           middleName: _middleNameController.text,
           lastName: _lastNameController.text,
           birthday: _birthdayController.text,
+          gender: _selectedGender!,
           phoneNumber: _phoneController.text,
         ),
       ),
@@ -115,9 +144,9 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: const BackButton(color: Colors.white),
       ),
@@ -245,23 +274,9 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                       width: 300,
                       child: TextField(
                         controller: _birthdayController,
-                        keyboardType: TextInputType.datetime,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d/]')),
-                          LengthLimitingTextInputFormatter(10),
-                          // Allow MM/dd/yyyy format only
-                          TextInputFormatter.withFunction((oldValue, newValue) {
-                            final text = newValue.text;
-                            if (text.length == 2 || text.length == 5) {
-                              return TextEditingValue(
-                                text: '$text/',
-                                selection: TextSelection.collapsed(
-                                    offset: text.length + 1),
-                              );
-                            }
-                            return newValue;
-                          }),
-                        ],
+                        readOnly: true, // Make the TextField read-only
+                        onTap: () => _selectDate(
+                            context), // Show the date picker when tapped
                         decoration: InputDecoration(
                           labelText: "Birthday",
                           labelStyle: const TextStyle(
@@ -271,12 +286,14 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                           border: const UnderlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.calendar_today),
-                            onPressed: () => _selectDate(context),
+                            onPressed: () => _selectDate(
+                                context), // Show the date picker when the icon is pressed
                           ),
                           hintText: 'mm/dd/yyyy',
                         ),
                       ),
                     ),
+
                     // Phone Number
                     SizedBox(
                       width: 300,
@@ -286,6 +303,32 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
                           labelText: "Phone Number",
+                          labelStyle: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          border: UnderlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    SizedBox(
+                      width: 300,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedGender,
+                        items: _gender.map((String gender) {
+                          return DropdownMenuItem(
+                            value: gender,
+                            child: Text(gender),
+                          );
+                        }).toList(),
+                        onChanged: (String? newGender) {
+                          setState(() {
+                            _selectedGender = newGender;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: "Gender",
                           labelStyle: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -305,7 +348,7 @@ class _UpdatePersonalInfoState extends State<UpdatePersonalInfo> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "NEXT",

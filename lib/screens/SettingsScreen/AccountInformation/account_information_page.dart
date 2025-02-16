@@ -91,19 +91,103 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
     }
   }
 
+  // Method to delete the user account
+  Future<void> _deleteAccount(String email) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Re-authenticate the user
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: email,
+        password: 'user-password', // Replace with the actual user password
+      );
+      await user.reauthenticateWithCredential(credential);
+
+      // Delete user data from Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
+
+      // Delete user account
+      await user.delete();
+
+      // Navigate to the login screen or home screen
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      print('Error deleting account: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting account: $e')),
+      );
+    }
+  }
+
+  // Show confirmation dialog for account deletion
+  void _showDeleteAccountDialog() {
+    final TextEditingController emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Are you sure you want to delete this account?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Enter your email to confirm',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteAccount(emailController.text.trim());
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: const Color(0xFF2275AA),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        centerTitle: true,
         title: const Text(
           'Account Information',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF2C3C3C),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+          ),
         ),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -144,27 +228,20 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                             radius: 70,
                             backgroundColor: Colors.grey[200],
                             child: ClipOval(
-                              child: _selectedImage != null
-                                  ? Image.file(
-                                      _selectedImage!,
+                              child: _profileImageUrl != null
+                                  ? Image.network(
+                                      _profileImageUrl!,
                                       width: 140,
                                       height: 140,
                                       fit: BoxFit.cover,
                                     )
-                                  : _profileImageUrl != null
-                                      ? Image.network(
-                                          _profileImageUrl!,
-                                          width: 140,
-                                          height: 140,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.asset(
-                                          // Load default asset image
-                                          'assets/img/default_profile.png',
-                                          width: 140,
-                                          height: 140,
-                                          fit: BoxFit.cover,
-                                        ),
+                                  : Image.asset(
+                                      // Load default asset image
+                                      'assets/img/default_profile.png',
+                                      width: 140,
+                                      height: 140,
+                                      fit: BoxFit.cover,
+                                    ),
                             ),
                           ),
                           Positioned(
@@ -234,7 +311,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                             );
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2C3C3C),
+                            backgroundColor: const Color(0xFF2275AA),
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -250,9 +327,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                     const SizedBox(height: 20),
                     Center(
                       child: TextButton(
-                        onPressed: () {
-                          print('Delete Account Pressed');
-                        },
+                        onPressed: _showDeleteAccountDialog,
                         child: const Text(
                           'DELETE ACCOUNT',
                           style: TextStyle(
