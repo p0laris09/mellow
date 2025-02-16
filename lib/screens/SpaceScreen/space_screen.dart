@@ -14,12 +14,14 @@ class SpaceScreen extends StatefulWidget {
 }
 
 class _SpaceScreenState extends State<SpaceScreen> {
-  List<Map<String, dynamic>> recentSpaces = []; // Define recentSpaces here
+  List<Map<String, dynamic>> recentSpaces = [];
+  bool _fabExpanded = false;
+  String selectedFilter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _fetchRecentSpaces(); // Fetch recent spaces when the widget is initialized
+    _fetchRecentSpaces();
   }
 
   Future<void> _fetchRecentSpaces() async {
@@ -28,7 +30,6 @@ class _SpaceScreenState extends State<SpaceScreen> {
       final uid = user?.uid;
       if (uid == null) return;
 
-      // Fetch spaces where the user is either an admin or a member
       final spacesQuery = await FirebaseFirestore.instance
           .collection('spaces')
           .where('members', arrayContains: uid)
@@ -39,14 +40,12 @@ class _SpaceScreenState extends State<SpaceScreen> {
           .where('admin', isEqualTo: uid)
           .get();
 
-      // Combine both queries, including the document ID for each space
       final allSpaces = [
         ...spacesQuery.docs.map((doc) => {...doc.data(), 'spaceId': doc.id}),
         ...spacesWithAdminQuery.docs
             .map((doc) => {...doc.data(), 'spaceId': doc.id}),
       ];
 
-      // Sort spaces by `lastOpened` timestamp, in descending order
       allSpaces.sort((a, b) {
         final lastOpenedA =
             a['lastOpened'] != null && a['lastOpened'] is Timestamp
@@ -59,10 +58,8 @@ class _SpaceScreenState extends State<SpaceScreen> {
         return lastOpenedB.compareTo(lastOpenedA);
       });
 
-      // Get the most recent space
       final mostRecentSpace = allSpaces.isNotEmpty ? allSpaces.first : null;
 
-      // Format the date of the most recent space
       String formattedDate = 'No recent spaces';
       if (mostRecentSpace != null) {
         DateTime? createdAt = mostRecentSpace['dateCreated'] != null &&
@@ -75,12 +72,11 @@ class _SpaceScreenState extends State<SpaceScreen> {
             : 'No date available';
       }
 
-      // Update the recentSpaces state with the most recent space
       setState(() {
         recentSpaces = mostRecentSpace != null
             ? [
                 {
-                  'spaceId': mostRecentSpace['spaceId'], // Add spaceId here
+                  'spaceId': mostRecentSpace['spaceId'],
                   'spaceName': mostRecentSpace['name'] ?? 'Unnamed Space',
                   'admin': mostRecentSpace['admin'] ?? 'Unknown Admin',
                   'description': mostRecentSpace['description'] ??
@@ -95,6 +91,48 @@ class _SpaceScreenState extends State<SpaceScreen> {
     }
   }
 
+  Widget _filterButton(String label) {
+    bool isSelected = label == selectedFilter;
+    return TextButton(
+      onPressed: () {
+        setState(() {
+          selectedFilter = label;
+          _filterSpaces();
+        });
+      },
+      style: TextButton.styleFrom(
+        backgroundColor:
+            isSelected ? const Color(0xFF2275AA) : Colors.grey[300],
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  void _filterSpaces() {
+    // Example filtering logic:
+    // Implement your filter functionality here
+    switch (selectedFilter) {
+      case 'All':
+        // Show all spaces
+        break;
+      case 'Shared':
+        // Filter for shared spaces
+        break;
+      case 'Collaboration Space':
+        // Filter for collaboration spaces
+        break;
+      default:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,14 +143,23 @@ class _SpaceScreenState extends State<SpaceScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Shared Spaces',
+              'Space and Collaboration',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF2C3C3C),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _filterButton('All'),
+                _filterButton('Shared'),
+                _filterButton('Collaboration Space'),
+              ],
+            ),
+            const SizedBox(height: 8),
             const Text(
               'Recently Opened',
               style: TextStyle(
@@ -146,20 +193,16 @@ class _SpaceScreenState extends State<SpaceScreen> {
                       Map<String, dynamic> data =
                           doc.data() as Map<String, dynamic>;
 
-                      // Check if 'createdAt' exists and is a valid Timestamp before casting
                       Timestamp? createdAt = data['createdAt'] as Timestamp?;
-                      DateTime date = createdAt?.toDate() ??
-                          DateTime.now(); // Default to current date if null
+                      DateTime date = createdAt?.toDate() ?? DateTime.now();
 
                       return Padding(
-                        padding: const EdgeInsets.only(
-                            bottom: 8.0), // Adding space around each card
+                        padding: const EdgeInsets.only(bottom: 8.0),
                         child: SpaceCard(
-                          spaceId: doc.id, // Pass the spaceId (document ID)
+                          spaceId: doc.id,
                           spaceName: data['name'] ?? 'Unnamed Space',
                           description: data['description'] ?? 'No description',
-                          date: DateFormat('MMM d, yyyy')
-                              .format(date), // Pass formatted date
+                          date: DateFormat('MMM d, yyyy').format(date),
                         ),
                       );
                     }).toList(),
@@ -167,40 +210,94 @@ class _SpaceScreenState extends State<SpaceScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const CreateSpacePage()),
-                  );
-                },
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text(
-                  'Create New Space',
-                  style: TextStyle(color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2C3C3C),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24.0, vertical: 12.0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
+      floatingActionButton: _buildFab(),
+    );
+  }
+
+  Widget _buildFab() {
+    return Stack(
+      children: [
+        Align(
+          alignment: Alignment
+              .bottomRight, // Align the entire content to the bottom-right
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.end, // Align buttons to the right
+            children: [
+              if (_fabExpanded) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Handle Collaborate with Peers action
+                    },
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor:
+                          const Color(0xFF2275AA), // Set background color
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text("Collab with peers",
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CreateSpacePage(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor:
+                          const Color(0xFF2275AA), // Set background color
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text("Create New Space",
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+              // Floating Action Button stays at the bottom-right and doesn't move when expanded
+              Padding(
+                padding: const EdgeInsets.only(
+                    bottom:
+                        16.0), // Add padding to space the FAB from the bottom
+                child: FloatingActionButton(
+                  onPressed: () {
+                    setState(() {
+                      _fabExpanded = !_fabExpanded;
+                    });
+                  },
+                  backgroundColor:
+                      const Color(0xFF2275AA), // Set background color of FAB
+                  child: Icon(
+                    _fabExpanded ? Icons.close : Icons.add,
+                    color: Colors.white, // Set icon color to white
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildRecentlyOpenedSection() {
-    // If there are no recent spaces, show a message
     if (recentSpaces.isEmpty) {
       return const Center(child: Text('No space was recently opened.'));
     }
@@ -214,10 +311,9 @@ class _SpaceScreenState extends State<SpaceScreen> {
           final spaceData = recentSpaces[index];
 
           return Padding(
-            padding:
-                const EdgeInsets.only(right: 8.0), // Add space between cards
+            padding: const EdgeInsets.only(right: 8.0),
             child: RecentSpaceCard(
-              spaceId: spaceData['spaceId'], // Pass the spaceId here
+              spaceId: spaceData['spaceId'],
               spaceName: spaceData['spaceName'] ?? 'Unnamed Space',
               description:
                   spaceData['description'] ?? 'No description available',

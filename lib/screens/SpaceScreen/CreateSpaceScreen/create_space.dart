@@ -51,79 +51,116 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Select Members'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Friends',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    // Check if there are no friends and show a message
-                    friends.isEmpty
-                        ? const Text(
-                            'You have no friends.',
-                            style: TextStyle(color: Colors.red),
-                          )
-                        : Wrap(
-                            spacing: 8,
-                            children: friends.map((friend) {
-                              bool isSelected =
-                                  selectedMembers.contains(friend['uid']);
-                              return ChoiceChip(
-                                label: Text(friend['name'] ?? 'Unknown'),
-                                selected: isSelected,
-                                selectedColor: Colors.green,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      selectedMembers
-                                          .add(friend['uid']!); // Add UID
-                                    } else {
-                                      selectedMembers
-                                          .remove(friend['uid']); // Remove UID
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                    const SizedBox(height: 20),
-                    const Text('Suggestions',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    // Check if there are no peers to display the "No peers to suggest" message
-                    peers.isEmpty
-                        ? const Text('No peers to suggest',
-                            style: TextStyle(color: Colors.red))
-                        : Wrap(
-                            spacing: 8,
-                            children: peers.map((peer) {
-                              bool isSelected =
-                                  selectedMembers.contains(peer['uid']);
-                              return ChoiceChip(
-                                label: Text(peer['name'] ?? 'Unknown'),
-                                selected: isSelected,
-                                selectedColor: Colors.green,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      selectedMembers
-                                          .add(peer['uid']!); // Add UID
-                                    } else {
-                                      selectedMembers
-                                          .remove(peer['uid']); // Remove UID
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                  ],
+              backgroundColor: const Color(0xFF2275AA),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Center(
+                child: const Text(
+                  'Select Members',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+              content: Center(
+                child: SizedBox(
+                  width: double.maxFinite,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Friends',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      friends.isEmpty
+                          ? const Text(
+                              'You have no friends.',
+                              style: TextStyle(color: Colors.red),
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              children: friends.map((friend) {
+                                bool isSelected =
+                                    selectedMembers.contains(friend['uid']);
+                                return ChoiceChip(
+                                  label: Text(friend['name'] ?? 'Unknown'),
+                                  selected: isSelected,
+                                  selectedColor: Colors.green,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        selectedMembers
+                                            .add(friend['uid']!); // Add UID
+                                      } else {
+                                        selectedMembers.remove(
+                                            friend['uid']); // Remove UID
+                                      }
+                                    });
+                                  },
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  selectedShadowColor: Colors.green,
+                                  shadowColor: Colors.grey,
+                                );
+                              }).toList(),
+                            ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Suggestions',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      peers.isEmpty
+                          ? const Text(
+                              'No peers to suggest',
+                              style: TextStyle(color: Colors.red),
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              children: peers.map((peer) {
+                                bool isSelected =
+                                    selectedMembers.contains(peer['uid']);
+                                return ChoiceChip(
+                                  label: Text(peer['name'] ?? 'Unknown'),
+                                  selected: isSelected,
+                                  selectedColor: Colors.green,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        selectedMembers
+                                            .add(peer['uid']!); // Add UID
+                                      } else {
+                                        selectedMembers
+                                            .remove(peer['uid']); // Remove UID
+                                      }
+                                    });
+                                  },
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  selectedShadowColor: Colors.green,
+                                  shadowColor: Colors.grey,
+                                );
+                              }).toList(),
+                            ),
+                    ],
+                  ),
                 ),
               ),
               actions: <Widget>[
                 TextButton(
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Colors.white)),
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -137,6 +174,10 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
                       memberNamesMap = uidNameMap;
                     });
                   },
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.green,
+                  ),
                 ),
               ],
             );
@@ -206,9 +247,9 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -227,12 +268,6 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.group_add),
-            onPressed: () => showSelectMemberDialog(context),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -302,10 +337,16 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
                                 fontSize: 16,
                               ),
                             ),
-                            ElevatedButton.icon(
+                            ElevatedButton(
                               onPressed: () => showSelectMemberDialog(context),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add Member'),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: const Color(0xFF2275AA),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Add Members'),
                             ),
                           ],
                         ),
@@ -338,7 +379,7 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
                           vertical: 20,
                         ),
                         foregroundColor: Colors.white,
-                        backgroundColor: const Color(0xFF2C3C3C),
+                        backgroundColor: const Color(0xFF2275AA),
                       ),
                       child: const Text('Create Space'),
                     ),

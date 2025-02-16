@@ -7,7 +7,7 @@ class TermsOfService extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(

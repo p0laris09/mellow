@@ -59,7 +59,7 @@ class _EmailUpdateSentState extends State<EmailUpdateSent> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  backgroundColor: const Color(0xFF2C3C3C), // Matches theme
+                  backgroundColor: const Color(0xFF2275AA), // Matches theme
                 ),
                 child: const Text(
                   "Back to Sign In",

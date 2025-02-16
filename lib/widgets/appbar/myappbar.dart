@@ -65,6 +65,15 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
               selectedIndex == 4 ? Icons.message : Icons.add_box,
             ),
           ),
+        if (selectedIndex == 1)
+          IconButton(
+            onPressed: () {
+              if (selectedIndex == 1) {
+                Navigator.pushNamed(context, '/taskhistory');
+              }
+            },
+            icon: Icon(selectedIndex == 1 ? Icons.task_alt : Icons.task_alt),
+          ),
         IconButton(
           onPressed: () {
             Navigator.pushNamed(context, '/notification');

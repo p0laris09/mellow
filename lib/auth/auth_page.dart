@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:mellow/auth/introduction/introduction.dart';
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
-import 'package:mellow/auth/onboarding/onboarding.dart';
 
 class AuthPage extends StatelessWidget {
   const AuthPage({super.key});
@@ -23,7 +23,7 @@ class AuthPage extends StatelessWidget {
             return const DashboardScreen();
           } else {
             // If the user is not logged in
-            return const OnboardingPage();
+            return const IntroductionScreen();
           }
         },
       ),

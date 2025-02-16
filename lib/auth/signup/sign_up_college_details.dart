@@ -175,9 +175,9 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: const BackButton(color: Colors.white),
       ),
@@ -371,25 +371,6 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                         menuMaxHeight: 300,
                       ),
                     ),
-                    // SizedBox(
-                    //   width: 300,
-                    //   child: TextField(
-                    //     inputFormatters: [
-                    //       FilteringTextInputFormatter.allow(
-                    //           RegExp(r'[a-zA-Z\s]')),
-                    //       LengthLimitingTextInputFormatter(200),
-                    //     ],
-                    //     controller: _programController,
-                    //     decoration: const InputDecoration(
-                    //       labelText: "Program",
-                    //       labelStyle: TextStyle(
-                    //         color: Colors.black,
-                    //         fontWeight: FontWeight.bold,
-                    //       ),
-                    //       border: UnderlineInputBorder(),
-                    //     ),
-                    //   ),
-                    // ),
                     const SizedBox(height: 9),
 
                     // Dropdown for Year
@@ -460,7 +441,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "NEXT",

@@ -4,7 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
+import 'package:mellow/screens/TaskCreation/task_creation_duo.dart';
+import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
+import 'package:mellow/screens/TaskManagement/EisenHowerMatrixScreen/eisenhowermatrix_screen.dart';
+import 'package:mellow/screens/TaskManagement/TaskListViewScreen/task_list_view_screen.dart';
+import 'package:mellow/widgets/cards/TaskCards/task_card.dart' as taskcard;
 
 class TaskManagementScreen extends StatefulWidget {
   const TaskManagementScreen({super.key});
@@ -20,7 +24,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   late int _currentYear;
   late int _currentMonthIndex;
   List<DocumentSnapshot> _tasks = [];
-  // String selectedSortOption = "Sort By"; // Track the selected sorting option
+  bool _fabExpanded = false;
+  String selectedFilter = 'All';
+  bool isMatrixView = true;
 
   @override
   void initState() {
@@ -241,160 +247,47 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             ),
           ),
         ),
-        // actions: [
-        //   Padding(
-        //     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-        //     child: ElevatedButton(
-        //       onPressed: () {
-        //         _showSortDialog(context); // Show the sorting dialog
-        //       },
-        //       style: ElevatedButton.styleFrom(
-        //         backgroundColor: const Color(0xFF2C3C3C),
-        //         shape: RoundedRectangleBorder(
-        //           borderRadius: BorderRadius.circular(8.0),
-        //         ),
-        //         padding: const EdgeInsets.symmetric(
-        //             vertical: 10.0, horizontal: 16.0),
-        //       ),
-        //       child: Text(
-        //         selectedSortOption, // Display selected option
-        //         style: const TextStyle(
-        //           color: Colors.white,
-        //           fontSize: 16.0,
-        //           fontWeight: FontWeight.bold,
-        //         ),
-        //       ),
-        //     ),
-        //   ),
-        // ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 90,
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() {
-                    _startOfWeek = _getStartOfWeekFromIndex(index);
-                  });
-                },
-                itemBuilder: (context, index) {
-                  DateTime weekStart = _getStartOfWeekFromIndex(index);
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _buildDayPicker(weekStart),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildOverdueSection(),
-            const SizedBox(height: 8),
-            _buildTaskSection(), // This will now use StreamBuilder for real-time updates
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const TaskCreationScreen(),
-            ),
-          );
-        },
-        backgroundColor: const Color(0xFF2C3C3C),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Create Task',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16.0,
-            fontWeight: FontWeight.bold,
+        actions: [
+          IconButton(
+            icon: Icon(isMatrixView ? Icons.list : Icons.border_all),
+            onPressed: () {
+              setState(() {
+                isMatrixView = !isMatrixView;
+              });
+            },
           ),
+        ],
+      ),
+      body: Container(
+        constraints: BoxConstraints.expand(),
+        child: AnimatedSwitcher(
+          duration: Duration(milliseconds: 300),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          child: isMatrixView
+              ? EisenhowerMatrixView(
+                  key: ValueKey("Eisenhower"),
+                  pageController: _pageController,
+                  startOfWeek: _startOfWeek,
+                  getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
+                  buildOverdueSection: _buildOverdueSection,
+                  buildDayPicker: _buildDayPicker,
+                )
+              : TaskListView(
+                  key: ValueKey("TaskList"),
+                  pageController: _pageController,
+                  startOfWeek: _startOfWeek,
+                  getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
+                  buildOverdueSection: _buildOverdueSection,
+                  buildTaskSection: _buildTaskSection,
+                  buildDayPicker: _buildDayPicker,
+                ),
         ),
       ),
+      floatingActionButton: _buildFab(),
     );
   }
-
-  // Function to show the sorting dialog
-  // void _showSortDialog(BuildContext context) {
-  //   showDialog(
-  //     context: context,
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         title: const Text("Sort By"),
-  //         content: Column(
-  //           mainAxisSize: MainAxisSize.min,
-  //           children: [
-  //             ListTile(
-  //               title: const Text("No Sorting"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //             ListTile(
-  //               title: const Text("Weight"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By - Weight");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //             ListTile(
-  //               title: const Text("Priority"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By - Priority");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //             ListTile(
-  //               title: const Text("Importance"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By - Importance");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //             ListTile(
-  //               title: const Text("Urgency"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By - Urgency");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //             ListTile(
-  //               title: const Text("Complexity"),
-  //               onTap: () {
-  //                 _updateSortOption("Sort By - Complexity");
-  //                 Navigator.pop(context);
-  //               },
-  //             ),
-  //           ],
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () {
-  //               Navigator.pop(context); // Close dialog
-  //             },
-  //             child: const Text("Cancel"),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-
-  // Function to update the selected sort option
-  // void _updateSortOption(String option) {
-  //   setState(() {
-  //     selectedSortOption = option;
-  //   });
-  // }
 
   Widget _buildOverdueSection() {
     String uid = FirebaseAuth.instance.currentUser!.uid;
@@ -467,7 +360,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
-                    child: TaskCard(
+                    child: taskcard.TaskCard(
                       taskId: taskId,
                       taskName: name,
                       dueDate: formattedDueDate,
@@ -559,7 +452,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
-                    child: TaskCard(
+                    child: taskcard.TaskCard(
                       taskId: taskId,
                       taskName: name,
                       dueDate: formattedDueDate,
@@ -575,6 +468,112 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Build the Floating Action Button with expansion feature
+  Widget _buildFab() {
+    return Stack(
+      children: [
+        Align(
+          alignment:
+              Alignment.bottomRight, // Align the content to the bottom-right
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.end, // Align buttons to the right
+            children: [
+              // Show additional buttons when FAB is expanded
+              if (_fabExpanded) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Handle "Personal" task creation
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskCreationScreen(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF2275AA),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text("Create a Personal"),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Handle "Duo" task creation
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskCreationDuo(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF2275AA),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text("Create a Duo Task"),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Handle "Space" task creation
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskCreationSpace(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF2275AA),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text("Create a Space Task"),
+                  ),
+                ),
+              ],
+              // Main Floating Action Button
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: FloatingActionButton(
+                  onPressed: () {
+                    setState(() {
+                      _fabExpanded = !_fabExpanded; // Toggle expansion state
+                    });
+                  },
+                  backgroundColor: const Color(0xFF2275AA),
+                  child: Icon(
+                    _fabExpanded
+                        ? Icons.close
+                        : Icons.add, // Toggle between "close" and "add" icons
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

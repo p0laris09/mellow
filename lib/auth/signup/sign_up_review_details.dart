@@ -48,18 +48,18 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      // Create a new user with email and password
+      // Attempt to create a new user
       UserCredential userCredential = await auth.createUserWithEmailAndPassword(
         email: widget.email,
         password: widget.password,
       );
 
-      // Save additional details to Firestore
-      if (userCredential.user != null) {
-        String uid = userCredential.user!.uid;
+      // Fetch the user
+      final User? user = userCredential.user;
 
-        // Add user details to the 'users' collection
-        await firestore.collection('users').doc(uid).set({
+      if (user != null) {
+        // Save additional details to Firestore
+        await firestore.collection('users').doc(user.uid).set({
           'firstName': widget.firstName,
           'middleName': widget.middleName,
           'lastName': widget.lastName,
@@ -69,28 +69,23 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
           'college': widget.college,
           'program': widget.program,
           'year': widget.year,
-          'phoneNumber': widget.phoneNumber,
           'section': widget.section,
+          'phoneNumber': widget.phoneNumber,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // Create the user's friends document with empty subcollections
-        await firestore.collection('friends').doc(uid).set({});
-        await firestore
-            .collection('friends')
-            .doc(uid)
-            .collection('friends')
-            .doc(); // Create empty 'friends' subcollection
-        await firestore
-            .collection('friends')
-            .doc(uid)
-            .collection('requests')
-            .doc(); // Create empty 'requests' subcollection
+        // Send email verification
+        await user.sendEmailVerification();
 
-        // Navigate to the dashboard
-        Navigator.pushReplacementNamed(context, '/dashboard');
+        // Sign out and navigate to verification page
+        await auth.signOut();
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/emailVerification',
+          (Route<dynamic> route) => false,
+        );
       }
     } on FirebaseAuthException catch (e) {
+      // Display specific error messages
       if (e.code == 'email-already-in-use') {
         _showErrorDialog(context, "Email address is already registered.");
       } else if (e.code == 'weak-password') {
@@ -130,9 +125,9 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: const BackButton(color: Colors.white),
       ),
@@ -167,7 +162,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
             ),
             const SizedBox(height: 30),
             SizedBox(
-              height: 770,
+              height: 790,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -321,7 +316,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            backgroundColor: const Color(0xFF2C3C3C),
+                            backgroundColor: const Color(0xFF2275AA),
                           ),
                           child: const Text(
                             "SIGN UP",

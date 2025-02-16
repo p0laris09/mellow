@@ -8,6 +8,7 @@ class AccountUpdateScreen extends StatefulWidget {
   final String lastName;
   final String birthday;
   final String phoneNumber;
+  final String gender;
   final String university;
   final String college;
   final String program;
@@ -21,6 +22,7 @@ class AccountUpdateScreen extends StatefulWidget {
     required this.lastName,
     required this.birthday,
     required this.phoneNumber,
+    required this.gender,
     required this.university,
     required this.college,
     required this.program,
@@ -49,6 +51,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
           'lastName': widget.lastName,
           'birthday': widget.birthday,
           'phoneNumber': widget.phoneNumber,
+          'gender': widget.gender,
           'university': widget.university,
           'college': widget.college,
           'program': widget.program,
@@ -73,9 +76,9 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: const BackButton(color: Colors.white),
       ),
@@ -139,6 +142,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
                     _buildReviewRow("Last Name:", widget.lastName),
                     _buildReviewRow("Birthday:", widget.birthday),
                     _buildReviewRow("Phone Number:", widget.phoneNumber),
+                    _buildReviewRow("Gender:", widget.gender),
                     const SizedBox(height: 20),
                     const Text(
                       'School Information',
@@ -168,7 +172,7 @@ class _AccountUpdateScreenState extends State<AccountUpdateScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            backgroundColor: const Color(0xFF2C3C3C),
+                            backgroundColor: const Color(0xFF2275AA),
                           ),
                           child: const Text(
                             "UPDATE",

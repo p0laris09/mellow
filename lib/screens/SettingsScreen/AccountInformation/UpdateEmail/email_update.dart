@@ -125,9 +125,9 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -269,8 +269,8 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                             onPressed: () {
                               setState(() {
@@ -295,7 +295,7 @@ class _EmailUpdatePageState extends State<EmailUpdatePage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "Update Email",

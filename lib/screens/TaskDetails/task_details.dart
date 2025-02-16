@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskEditScreen/task_edit.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final String taskId;
@@ -9,7 +10,7 @@ class TaskDetailsScreen extends StatefulWidget {
   final String dueDate;
   final DateTime startDateTime;
   final DateTime dueDateTime;
-  final String taskStatus;
+  final String status;
   final String description;
   final String priority;
   final String urgency;
@@ -24,7 +25,7 @@ class TaskDetailsScreen extends StatefulWidget {
     required this.dueDate,
     required this.startDateTime,
     required this.dueDateTime,
-    required this.taskStatus,
+    required this.status,
     required this.description,
     required this.priority,
     required this.urgency,
@@ -41,7 +42,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   late String dueDate;
   late DateTime startDateTime;
   late DateTime dueDateTime;
-  late String taskStatus;
+  late String status;
   late String description;
   late String priority;
   late String urgency;
@@ -51,19 +52,16 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    // Simulate reloading or refreshing data by setting new values
     _loadTaskData();
   }
 
-  // Simulate fetching data or refreshing the screen
   void _loadTaskData() {
-    // You can replace this with actual data fetching from Firestore or another source
     setState(() {
       taskName = widget.taskName;
       dueDate = widget.dueDate;
       startDateTime = widget.startDateTime;
       dueDateTime = widget.dueDateTime;
-      taskStatus = widget.taskStatus;
+      status = widget.status;
       description = widget.description;
       priority = widget.priority;
       urgency = widget.urgency;
@@ -72,7 +70,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     });
   }
 
-  // Convert numeric values to string labels
   String _getPriorityLabel(String value) {
     switch (value) {
       case '3.0':
@@ -86,12 +83,32 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
+  // Delete Task Functionality
+  Future<void> _deleteTask() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tasks') // Replace with your collection name
+          .doc(widget.taskId)
+          .delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task deleted successfully!')),
+      );
+
+      // Navigate back after deletion
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting task: ${e.toString()}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -103,12 +120,12 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           },
         ),
         centerTitle: true,
-        flexibleSpace: Center(
+        flexibleSpace: const Center(
           child: Padding(
-            padding: const EdgeInsets.only(top: 12.0),
+            padding: EdgeInsets.only(top: 12.0),
             child: Text(
               'Task Details',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -123,12 +140,28 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               Icons.check,
               color: Colors.white,
             ),
-            onPressed: () {
-              // Add your logic for the check icon
-              print('Check icon pressed');
+            onPressed: () async {
+              try {
+                await FirebaseFirestore.instance
+                    .collection('tasks')
+                    .doc(widget.taskId)
+                    .update({'status': 'Finished'});
+
+                setState(() {
+                  status = 'Finished';
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Task marked as Finished!')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: ${e.toString()}')),
+                );
+              }
             },
           ),
-          // Pen Icon - Navigate to Task Creation screen with task details
+          // Edit Icon
           IconButton(
             icon: const Icon(
               Icons.edit,
@@ -144,7 +177,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                     taskName: widget.taskName,
                     startTime: widget.startTime,
                     dueDate: widget.dueDate,
-                    taskStatus: widget.taskStatus,
+                    status: widget.status,
                     description: widget.description,
                     priority: double.tryParse(widget.priority) ?? 0.0,
                     urgency: double.tryParse(widget.urgency) ?? 0.0,
@@ -162,13 +195,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Task Name
             const Text(
               'Name',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black),
             ),
             const SizedBox(height: 4),
             Text(
@@ -176,129 +205,87 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 16),
-
-            // Due Date
             const Text(
               'Due Date',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black),
             ),
             const SizedBox(height: 4),
             Text(
               dueDate,
-              style: const TextStyle(
-                fontSize: 20,
-                color: Colors.white,
-              ),
+              style: const TextStyle(fontSize: 20, color: Colors.black),
             ),
             const SizedBox(height: 16),
-
-            // Task Status
             const Text(
               'Status',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black),
             ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: taskStatus == 'Pending'
+                color: status == 'Pending'
                     ? Colors.blue
-                    : taskStatus == 'Ongoing'
+                    : status == 'Ongoing'
                         ? Colors.green
-                        : taskStatus == 'Overdue'
+                        : status == 'Overdue'
                             ? Colors.red
                             : Colors.grey,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                taskStatus,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
+                status,
+                style: const TextStyle(color: Colors.black, fontSize: 16),
               ),
             ),
             const SizedBox(height: 24),
-
-            // Start Time and End Time
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Start Time
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'Start Time',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.black),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       DateFormat('hh:mm a').format(startDateTime),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 18, color: Colors.black),
                     ),
                   ],
                 ),
-                // End Time
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'End Time',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.black),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       DateFormat('hh:mm a').format(dueDateTime),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 18, color: Colors.black),
                     ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 24),
-
-            // Description
             const Text(
               'Description',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black),
             ),
             const SizedBox(height: 8),
             Text(
               description,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.white,
-              ),
+              style: const TextStyle(fontSize: 16, color: Colors.black),
             ),
             const SizedBox(height: 24),
-
-            // Priority Section
             _buildPrioritySection('Priority', _getPriorityLabel(priority)),
             const SizedBox(height: 16),
             _buildPrioritySection('Urgency', _getPriorityLabel(urgency)),
@@ -306,31 +293,65 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             _buildPrioritySection('Importance', _getPriorityLabel(importance)),
             const SizedBox(height: 16),
             _buildPrioritySection('Complexity', _getPriorityLabel(complexity)),
+
+            // Delete Task Text at the bottom
+            const SizedBox(height: 40), // Adding space before delete text
+            Center(
+              child: GestureDetector(
+                onTap: () async {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete Task'),
+                      content: const Text(
+                          'Are you sure you want to delete this task?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _deleteTask();
+                          },
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: const Text(
+                  'DELETE TASK',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Helper method for Priority Section
-  Widget _buildPrioritySection(String label, String value) {
+  Widget _buildPrioritySection(String title, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
+          title,
+          style: const TextStyle(fontSize: 14, color: Colors.black),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 20,
-            color: Colors.white,
-          ),
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
         ),
       ],
     );

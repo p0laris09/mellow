@@ -11,7 +11,7 @@ class TaskEditScreen extends StatefulWidget {
   final String taskName;
   final String startTime;
   final String dueDate;
-  final String taskStatus;
+  final String status;
   final String description;
   final double priority;
   final double urgency;
@@ -25,7 +25,7 @@ class TaskEditScreen extends StatefulWidget {
     required this.taskName,
     required this.startTime,
     required this.dueDate,
-    required this.taskStatus,
+    required this.status,
     required this.description,
     required this.priority,
     required this.urgency,
@@ -323,9 +323,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -562,7 +562,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 50, vertical: 20),
                           foregroundColor: Colors.white,
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text('Update Task'),
                       ),

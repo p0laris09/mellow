@@ -7,6 +7,8 @@ import 'package:mellow/screens/SpaceScreen/space_screen.dart';
 import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:mellow/widgets/appbar/myappbar.dart';
 import 'package:mellow/widgets/bottomnav/mybottomnavbar.dart';
+import 'package:mellow/widgets/cards/AnalyticsCards/task_analytics_card.dart';
+import 'package:mellow/widgets/cards/AnalyticsCards/weight_analytics_card.dart';
 import 'package:mellow/widgets/cards/SpaceCards/recently_space_card.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -71,7 +73,6 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     _fetchTasks();
     _loadUserProfile();
     _fetchRecentSpaces();
-    _checkAnalyticsAvailability();
   }
 
   Future<void> _loadUserProfile() async {
@@ -140,17 +141,40 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     if (currentUser == null) return;
 
     try {
-      // Fetch tasks including those marked as overdue
+      // Fetch tasks where user is either the creator (userId) or assigned to (assignedTo)
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('tasks')
-          .where('userId', isEqualTo: currentUser.uid)
           .where('status', whereIn: ['pending', 'ongoing', 'overdue'])
-          .orderBy('endTime')
+          .where('userId',
+              isEqualTo: currentUser.uid) // Tasks created by the user
           .get();
+
+      // Fetch tasks where the user is assigned to them
+      QuerySnapshot assignedTasksSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedTo',
+              arrayContains: currentUser.uid) // Tasks assigned to the user
+          .where('status', whereIn: ['pending', 'ongoing', 'overdue']).get();
+
+      // Combine the results
+      List<QueryDocumentSnapshot> allTasks = []
+        ..addAll(querySnapshot.docs)
+        ..addAll(assignedTasksSnapshot.docs);
+
+      // Remove duplicates by taskId (if any)
+      Set<String> taskIds = Set();
+      List<QueryDocumentSnapshot> uniqueTasks = [];
+      for (var doc in allTasks) {
+        String taskId = doc.id;
+        if (!taskIds.contains(taskId)) {
+          taskIds.add(taskId);
+          uniqueTasks.add(doc);
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _tasks = querySnapshot.docs;
+          _tasks = uniqueTasks;
         });
       }
     } catch (e) {
@@ -164,39 +188,67 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Fetch spaces where the user is either a member or an admin
+      // Fetch spaces where the user is a member or admin
       QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('spaces')
           .where('members',
               arrayContains: user.uid) // User is a member of the space
-          .where('admin', isEqualTo: user.uid) // User is the admin of the space
           .orderBy('lastOpened',
               descending: true) // Sort by lastOpened in descending order
           .limit(2) // Limit to the 2 most recent spaces
           .get();
 
+      // If no spaces found, fetch spaces where the user is an admin
+      if (querySnapshot.docs.isEmpty) {
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('spaces')
+            .where('admin',
+                isEqualTo: user.uid) // User is the admin of the space
+            .orderBy('lastOpened',
+                descending: true) // Sort by lastOpened in descending order
+            .limit(2) // Limit to the 2 most recent spaces
+            .get();
+      }
+
+      print(
+          "Fetched spaces: ${querySnapshot.docs.length} spaces found."); // Debugging line
+
+      // Convert lastOpened field to DateTime
+      List<DocumentSnapshot> processedSpaces = querySnapshot.docs.map((doc) {
+        var space = doc.data() as Map<String, dynamic>;
+        final lastOpened = space['lastOpened'];
+        DateTime? lastOpenedDate;
+
+        if (lastOpened != null) {
+          if (lastOpened is Timestamp) {
+            // If it's already a Timestamp, convert it to DateTime
+            lastOpenedDate = lastOpened.toDate();
+          } else if (lastOpened is String) {
+            // If it's a String, try to parse it to DateTime
+            try {
+              lastOpenedDate = DateTime.parse(lastOpened);
+            } catch (e) {
+              print('Error parsing lastOpened string: $e');
+            }
+          }
+        }
+
+        // Optionally, you can add the converted DateTime back to the space data or use it for further processing
+        if (lastOpenedDate != null) {
+          space['lastOpenedDate'] =
+              lastOpenedDate; // Adding the converted DateTime back to the space map
+        }
+
+        return doc; // Returning the original document, you can modify this if needed
+      }).toList();
+
       if (mounted) {
         setState(() {
-          _recentSpaces = querySnapshot.docs;
+          _recentSpaces = processedSpaces; // Use the processed spaces list
         });
       }
     } catch (e) {
       print("Error fetching recent spaces: $e");
-    }
-  }
-
-  Future<void> _checkAnalyticsAvailability() async {
-    try {
-      QuerySnapshot querySnapshot =
-          await FirebaseFirestore.instance.collection('analytics').get();
-
-      if (mounted) {
-        setState(() {
-          hasAnalytics = querySnapshot.docs.isNotEmpty;
-        });
-      }
-    } catch (e) {
-      print("Error checking analytics availability: $e");
     }
   }
 
@@ -267,35 +319,6 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   }
 
   Widget _buildAnalyticsSection() {
-    if (!hasAnalytics) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Text(
-                "Task Analytics",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ),
-            const Text(
-              "No analytics to show.",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
       child: Column(
@@ -304,7 +327,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Text(
-              "Task Analytics",
+              "Analytics",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -312,7 +335,83 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          // Add analytics content here (if any)
+          StreamBuilder<DocumentSnapshot>(
+            // Stream to get totalWeight from Firestore
+            stream: FirebaseFirestore.instance
+                .collection('users') // Assuming you store user data here
+                .doc(FirebaseAuth.instance.currentUser!.uid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Text(
+                  "Error fetching analytics data.",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                );
+              }
+
+              if (!snapshot.hasData || !snapshot.data!.exists) {
+                return const Text(
+                  "No analytics to show.",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                );
+              }
+
+              var userData = snapshot.data!.data() as Map<String, dynamic>;
+              double totalWeight = userData['totalWeight'] ?? 0.0;
+
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('tasks')
+                    .where('userId',
+                        isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text(
+                      "Error fetching task data.",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Text(
+                      "No tasks available for analytics.",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    );
+                  }
+
+                  var tasks = snapshot.data!.docs;
+
+                  // Recalculate the total weight if it's not found in Firestore
+                  double calculatedWeight = tasks.fold<double>(
+                    0.0,
+                    (sum, task) => sum + (task['weight'] ?? 0.0),
+                  );
+
+                  // If Firestore doesn't have the weight, we use the calculated weight
+                  totalWeight =
+                      totalWeight != 0.0 ? totalWeight : calculatedWeight;
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: TaskAnalyticsCard(
+                          totalTasks: tasks.length,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: WeightAnalyticsCard(
+                          totalWeight: totalWeight,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
@@ -352,11 +451,25 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       final space = _recentSpaces[index];
                       final spaceName = space['name'] ?? 'Unnamed Space';
                       final description = space['description'] ?? '';
-                      final lastOpened = space['lastOpened'] != null
-                          ? (space['lastOpened'] as Timestamp).toDate()
-                          : null;
-                      final date = lastOpened != null
-                          ? DateFormat('MMM d, yyyy').format(lastOpened)
+                      final lastOpened = space['lastOpened'];
+
+                      DateTime? lastOpenedDate;
+
+                      // Handle both Timestamp and String cases
+                      if (lastOpened != null) {
+                        if (lastOpened is Timestamp) {
+                          lastOpenedDate = lastOpened.toDate();
+                        } else if (lastOpened is String) {
+                          try {
+                            lastOpenedDate = DateTime.parse(lastOpened);
+                          } catch (e) {
+                            print('Error parsing lastOpened string: $e');
+                          }
+                        }
+                      }
+
+                      final date = lastOpenedDate != null
+                          ? DateFormat('MMM d, yyyy').format(lastOpenedDate)
                           : 'Unknown Date';
 
                       return Padding(
