@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:mellow/screens/SpaceScreen/SpaceActivity/space_activity_feed.dart';
 import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
 import 'package:mellow/screens/SpaceScreen/SpaceTasks/space_tasks_screen.dart';
+import 'package:mellow/screens/SpaceScreen/SpaceSettings/space_setting_screen.dart';
+import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 
 class ViewSpace extends StatefulWidget {
   final String spaceId;
@@ -58,7 +61,9 @@ class _ViewSpaceState extends State<ViewSpace> {
         final userData = userDoc.data() as Map<String, dynamic>;
         return "${userData['firstName']} ${userData['lastName']}";
       }
-    } catch (e) {}
+    } catch (e) {
+      print("Error getting user full name: $e");
+    }
     return "Unknown User";
   }
 
@@ -86,7 +91,13 @@ class _ViewSpaceState extends State<ViewSpace> {
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
             onPressed: () {
-              // Handle settings icon press
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      SpaceSettingScreen(spaceId: widget.spaceId),
+                ),
+              );
             },
           ),
         ],
@@ -102,30 +113,6 @@ class _ViewSpaceState extends State<ViewSpace> {
               buildTaskList(),
               const SizedBox(height: 16),
               buildActivityFeed(),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) =>
-                            SpaceTasksScreen(spaceId: widget.spaceId)),
-                  );
-                },
-                child: const Text('Go to Space Tasks'),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) =>
-                            SpaceActivityFeedScreen(spaceId: widget.spaceId)),
-                  );
-                },
-                child: const Text('Go to Activity Feed'),
-              ),
             ],
           ),
         ),
@@ -151,6 +138,9 @@ class _ViewSpaceState extends State<ViewSpace> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
         if (!snapshot.hasData || !snapshot.data!.exists) {
           return const Text("No space details found.");
         }
@@ -170,10 +160,32 @@ class _ViewSpaceState extends State<ViewSpace> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: buildAnalyticsCard(
-                title: "Tasks",
-                count: tasksCount,
-                color: const Color(0xFF2275AA),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: tasksStream,
+                builder: (context, taskSnapshot) {
+                  if (taskSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (taskSnapshot.hasError) {
+                    return Center(child: Text("Error: ${taskSnapshot.error}"));
+                  }
+                  if (!taskSnapshot.hasData ||
+                      taskSnapshot.data!.docs.isEmpty) {
+                    return buildAnalyticsCard(
+                      title: "Tasks",
+                      count: 0,
+                      color: const Color(0xFF2275AA),
+                    );
+                  }
+
+                  final tasksCount = taskSnapshot.data!.docs.length;
+
+                  return buildAnalyticsCard(
+                    title: "Tasks",
+                    count: tasksCount,
+                    color: const Color(0xFF2275AA),
+                  );
+                },
               ),
             ),
           ],
@@ -225,57 +237,118 @@ class _ViewSpaceState extends State<ViewSpace> {
 
   Widget buildTaskList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: tasksStream,
+      stream: FirebaseFirestore.instance
+          .collection('tasks')
+          .where('spaceId', isEqualTo: widget.spaceId)
+          .orderBy('createdAt', descending: false)
+          .limit(3)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          print("Error fetching tasks: ${snapshot.error}");
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("No tasks available"));
+          print("No tasks available");
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Tasks',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                SpaceTasksScreen(spaceId: widget.spaceId)),
+                      );
+                    },
+                    child: const Text(
+                      'See More',
+                      style: TextStyle(
+                        color: Color(0xFF2275AA),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  "No tasks available",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ),
+            ],
+          );
         }
 
-        final tasks = snapshot.data!.docs.take(3).toList();
+        final tasks = snapshot.data!.docs.toList();
+        print("Fetched ${tasks.length} tasks");
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Tasks',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2275AA),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Tasks',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              SpaceTasksScreen(spaceId: widget.spaceId)),
+                    );
+                  },
+                  child: const Text(
+                    'See More',
+                    style: TextStyle(
+                      color: Color(0xFF2275AA),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             ...tasks.map((taskDoc) {
               final task = taskDoc.data() as Map<String, dynamic>;
-              return TaskItem(
-                title: task['taskName'] ?? 'Unnamed Task',
-                assignedTo: task['assignedTo']?.join(", ") ?? "Unassigned",
-                dateCreated:
-                    (task['createdAt'] as Timestamp?)?.toDate().toString() ??
-                        "Unknown",
+              print(
+                  "Task: ${task['taskName']}, Assigned to: ${task['assignedTo']}, Created at: ${task['createdAt']}");
+              return TaskCard(
+                taskId: taskDoc.id,
+                taskName: task['taskName'] ?? 'Unnamed Task',
+                dueDate: (task['dueDate'] as Timestamp).toDate().toString(),
+                startTime: (task['startTime'] as Timestamp).toDate().toString(),
+                startDateTime: (task['startTime'] as Timestamp).toDate(),
+                dueDateTime: (task['dueDate'] as Timestamp).toDate(),
+                taskStatus: task['status'] ?? 'Pending',
               );
             }).toList(),
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          SpaceTasksScreen(spaceId: widget.spaceId)),
-                );
-              },
-              child: const Text(
-                'See More',
-                style: TextStyle(
-                  color: Color(0xFF2275AA),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -289,56 +362,173 @@ class _ViewSpaceState extends State<ViewSpace> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          print("Error fetching activities: ${snapshot.error}");
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("No activities available"));
+          print("No activities available");
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recent Activities',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => SpaceActivityFeedScreen(
+                                spaceId: widget.spaceId)),
+                      );
+                    },
+                    child: const Text(
+                      'See More',
+                      style: TextStyle(
+                        color: Color(0xFF2275AA),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  "No activities available",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ),
+            ],
+          );
         }
 
         final activities = snapshot.data!.docs.take(3).toList();
+        print("Fetched ${activities.length} activities");
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Recent Activities',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2275AA),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Activities',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              SpaceActivityFeedScreen(spaceId: widget.spaceId)),
+                    );
+                  },
+                  child: const Text(
+                    'See More',
+                    style: TextStyle(
+                      color: Color(0xFF2275AA),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             ...activities.map((activityDoc) {
               final activity = activityDoc.data() as Map<String, dynamic>;
-              return ActivityItem(
-                description: activity['description'] ?? 'No Description',
-                timestamp: (activity['timestamp'] as Timestamp?)
-                        ?.toDate()
-                        .toString() ??
-                    "Unknown",
+              final createdBy = activity['createdBy'] as String;
+              final taskName = activity['taskName'] as String;
+              final assignedToUids = activity['assignedTo'] as List<dynamic>;
+              final timestamp = (activity['timestamp'] as Timestamp).toDate();
+              final timeAgo = timeAgoSinceDate(timestamp);
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(createdBy)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final userData =
+                      userSnapshot.data!.data() as Map<String, dynamic>;
+                  final userName =
+                      "${userData['firstName']} ${userData['lastName']}";
+
+                  return FutureBuilder<QuerySnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .where(FieldPath.documentId, whereIn: assignedToUids)
+                        .get(),
+                    builder: (context, assignedToSnapshot) {
+                      if (!assignedToSnapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final assignedToNames =
+                          assignedToSnapshot.data!.docs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return "${data['firstName']} ${data['lastName']}";
+                      }).join(", ");
+
+                      return ActivityItem(
+                        userName: userName,
+                        description:
+                            "$userName created task $taskName and assigned it to $assignedToNames",
+                        timestamp: timeAgo,
+                      );
+                    },
+                  );
+                },
               );
             }).toList(),
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          SpaceActivityFeedScreen(spaceId: widget.spaceId)),
-                );
-              },
-              child: const Text(
-                'See More',
-                style: TextStyle(
-                  color: Color(0xFF2275AA),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
           ],
         );
       },
     );
+  }
+
+  String timeAgoSinceDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 8) {
+      return DateFormat('yyyy-MM-dd').format(date);
+    } else if ((difference.inDays / 7).floor() >= 1) {
+      return '1 week ago';
+    } else if (difference.inDays >= 2) {
+      return '${difference.inDays} days ago';
+    } else if (difference.inDays >= 1) {
+      return '1 day ago';
+    } else if (difference.inHours >= 2) {
+      return '${difference.inHours} hours ago';
+    } else if (difference.inHours >= 1) {
+      return '1 hour ago';
+    } else if (difference.inMinutes >= 2) {
+      return '${difference.inMinutes} minutes ago';
+    } else if (difference.inMinutes >= 1) {
+      return '1 minute ago';
+    } else if (difference.inSeconds >= 3) {
+      return '${difference.inSeconds} seconds ago';
+    } else {
+      return 'just now';
+    }
   }
 }
 
@@ -371,11 +561,13 @@ class TaskItem extends StatelessWidget {
 }
 
 class ActivityItem extends StatelessWidget {
+  final String userName;
   final String description;
   final String timestamp;
 
   const ActivityItem({
     super.key,
+    required this.userName,
     required this.description,
     required this.timestamp,
   });
@@ -385,10 +577,10 @@ class ActivityItem extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
-        leading: const Icon(Icons.event, color: Color(0xFF2275AA)),
+        leading: const Icon(Icons.event_note, color: Color(0xFF2275AA)),
         title: Text(description,
             style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text("Timestamp: $timestamp"),
+        subtitle: Text("Created $timestamp"),
       ),
     );
   }

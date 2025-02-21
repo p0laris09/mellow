@@ -78,10 +78,10 @@ class TaskManager {
   Map<String, double> criteriaWeights = {
     'priority': 0.4,
     'urgency': 0.3,
-    'complexity': 0.3, // Adjusted for complexity without importance
+    'complexity': 0.2,
   };
 
-  final double weightLimit = 60.0;
+  final double weightLimit = 20.0;
 
   TaskManager({required this.currentUserId});
 
@@ -259,7 +259,7 @@ class TaskManager {
   List<DateTime> suggestAlternativeTimes(Task task, int numSuggestions) {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
-    Duration interval = Duration(hours: 1);
+    Duration interval = const Duration(hours: 1);
 
     DateTime endOfDay =
         DateTime(current.year, current.month, current.day, 23, 59, 59);

@@ -23,6 +23,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   late PageController _pageController;
   late int _currentYear;
   late int _currentMonthIndex;
+  late DateTime _currentStartOfWeek;
   List<DocumentSnapshot> _tasks = [];
   bool _fabExpanded = false;
   String selectedFilter = 'All';
@@ -38,7 +39,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       initialPage: 5000,
       viewportFraction: 1.0,
     );
-    _fetchTasks(); // Fetch tasks initially
+    _fetchTasks(); // Fetch tasks initiallyZ
   }
 
   @override
@@ -226,6 +227,50 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     });
   }
 
+  Widget _filterButton(String label) {
+    return TextButton(
+      onPressed: () {
+        setState(() {
+          selectedFilter = label;
+        });
+      },
+      style: TextButton.styleFrom(
+        backgroundColor: selectedFilter == label
+            ? const Color(0xFF2275AA)
+            : Colors.grey[300],
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selectedFilter == label ? Colors.white : Colors.black,
+          fontWeight:
+              selectedFilter == label ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterSection() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          children: [
+            _filterButton('All'),
+            const SizedBox(width: 8),
+            _filterButton('Personal'),
+            const SizedBox(width: 8),
+            _filterButton('Shared'),
+            const SizedBox(width: 8),
+            _filterButton('Collaboration Space'),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -260,29 +305,65 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       ),
       body: Container(
         constraints: BoxConstraints.expand(),
-        child: AnimatedSwitcher(
-          duration: Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          child: isMatrixView
-              ? EisenhowerMatrixView(
-                  key: ValueKey("Eisenhower"),
-                  pageController: _pageController,
-                  startOfWeek: _startOfWeek,
-                  getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
-                  buildOverdueSection: _buildOverdueSection,
-                  buildDayPicker: _buildDayPicker,
-                )
-              : TaskListView(
-                  key: ValueKey("TaskList"),
-                  pageController: _pageController,
-                  startOfWeek: _startOfWeek,
-                  getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
-                  buildOverdueSection: _buildOverdueSection,
-                  buildTaskSection: _buildTaskSection,
-                  buildDayPicker: _buildDayPicker,
-                ),
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 90,
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentStartOfWeek = _getStartOfWeekFromIndex(index);
+                  });
+                },
+                itemBuilder: (context, index) {
+                  DateTime weekStart = _getStartOfWeekFromIndex(index);
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: _buildDayPicker(weekStart),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 2),
+            _buildFilterSection(),
+            const SizedBox(height: 16),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+                child: isMatrixView
+                    ? EisenhowerMatrixView(
+                        key: ValueKey("Eisenhower"),
+                        pageController: _pageController,
+                        startOfWeek: _startOfWeek,
+                        getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
+                        buildOverdueSection: _buildOverdueSection,
+                        tasksStream: FirebaseFirestore.instance
+                            .collection('tasks')
+                            .snapshots(),
+                        selectedFilter: selectedFilter,
+                      )
+                    : TaskListView(
+                        key: ValueKey("TaskList"),
+                        pageController: _pageController,
+                        startOfWeek: _startOfWeek,
+                        getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
+                        buildOverdueSection: _buildOverdueSection,
+                        buildTaskSection: (tasks) => _buildTaskSection(tasks),
+                        tasksStream: FirebaseFirestore.instance
+                            .collection('tasks')
+                            .snapshots(),
+                        selectedFilter: selectedFilter,
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: _buildFab(),
@@ -298,7 +379,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('tasks')
-            .where('userId', isEqualTo: uid)
             .where('endTime',
                 isLessThan: Timestamp.fromDate(now)) // Overdue tasks
             .where('status', isNotEqualTo: 'Finished') // Exclude finished tasks
@@ -314,7 +394,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             return const SizedBox.shrink();
           }
 
-          var overdueTaskDocs = snapshot.data!.docs;
+          var overdueTaskDocs = snapshot.data!.docs.where((task) {
+            Map<String, dynamic> taskData = task.data() as Map<String, dynamic>;
+            if (selectedFilter == 'All') {
+              return taskData['assignedTo'].contains(uid) ||
+                  taskData['userId'] == uid;
+            } else if (selectedFilter == 'Personal') {
+              return taskData['userId'] == uid &&
+                  taskData['taskType'] == 'personal';
+            } else if (selectedFilter == 'Shared') {
+              return taskData['taskType'] == 'duo';
+            } else if (selectedFilter == 'Collaboration Space') {
+              return taskData['taskType'] == 'space' &&
+                  taskData['assignedTo'].contains(uid);
+            }
+            return false;
+          }).toList();
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,11 +431,14 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 itemCount: overdueTaskDocs.length,
                 itemBuilder: (context, index) {
                   DocumentSnapshot task = overdueTaskDocs[index];
+                  Map<String, dynamic> taskData =
+                      task.data() as Map<String, dynamic>;
                   String taskId = task.id; // Get Firestore's document ID
                   DateTime startTime =
-                      (task['startTime'] as Timestamp).toDate();
-                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
-                  String name = task['taskName'] ?? 'Unnamed Task';
+                      (taskData['startTime'] as Timestamp).toDate();
+                  DateTime dueDate =
+                      (taskData['endTime'] as Timestamp).toDate();
+                  String name = taskData['taskName'] ?? 'Unnamed Task';
 
                   String formattedStartTime =
                       DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
@@ -349,7 +447,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
                   // Determine task status based on the end time
                   String taskStatus;
-                  if (task['status'] == 'Finished') {
+                  if (taskData.containsKey('status') &&
+                      taskData['status'] == 'Finished') {
                     taskStatus =
                         'Finished'; // Set status to Finished if it is finished
                   } else if (dueDate.isBefore(now)) {
@@ -379,7 +478,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     );
   }
 
-  Widget _buildTaskSection() {
+  Widget _buildTaskSectionWithTasks(List<Map<String, dynamic>> tasks) {
     String uid = FirebaseAuth.instance.currentUser!.uid;
 
     DateTime startOfDay =
@@ -406,7 +505,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('tasks')
-                .where('userId', isEqualTo: uid)
                 .where('startTime',
                     isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
                 .where('startTime',
@@ -429,7 +527,23 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 );
               }
 
-              var taskDocs = snapshot.data!.docs;
+              var taskDocs = snapshot.data!.docs.where((task) {
+                Map<String, dynamic> taskData =
+                    task.data() as Map<String, dynamic>;
+                if (selectedFilter == 'All') {
+                  return taskData['assignedTo'].contains(uid) ||
+                      taskData['userId'] == uid;
+                } else if (selectedFilter == 'Personal') {
+                  return taskData['userId'] == uid &&
+                      taskData['taskType'] == 'personal';
+                } else if (selectedFilter == 'Shared') {
+                  return taskData['taskType'] == 'duo';
+                } else if (selectedFilter == 'Collaboration Space') {
+                  return taskData['taskType'] == 'space' &&
+                      taskData['assignedTo'].contains(uid);
+                }
+                return false;
+              }).toList();
 
               return ListView.builder(
                 physics: const NeverScrollableScrollPhysics(),
@@ -437,13 +551,132 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 itemCount: taskDocs.length,
                 itemBuilder: (context, index) {
                   DocumentSnapshot task = taskDocs[index];
+                  Map<String, dynamic> taskData =
+                      task.data() as Map<String, dynamic>;
                   String taskId = task.id;
                   DateTime startTime =
-                      (task['startTime'] as Timestamp).toDate();
-                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
-                  String name = task['taskName'] ?? 'Unnamed Task';
-                  String taskStatus =
-                      task['status'] ?? 'Pending'; // Fetch task status
+                      (taskData['startTime'] as Timestamp).toDate();
+                  DateTime dueDate =
+                      (taskData['endTime'] as Timestamp).toDate();
+                  String name = taskData['taskName'] ?? 'Unnamed Task';
+                  String taskStatus = taskData.containsKey('status')
+                      ? taskData['status']
+                      : 'Pending'; // Provide default value if status is missing
+
+                  String formattedStartTime =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(startTime);
+                  String formattedDueDate =
+                      DateFormat('yyyy-MM-dd hh:mm a').format(dueDate);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: taskcard.TaskCard(
+                      taskId: taskId,
+                      taskName: name,
+                      dueDate: formattedDueDate,
+                      startTime: formattedStartTime,
+                      startDateTime: startTime,
+                      dueDateTime: dueDate,
+                      taskStatus: taskStatus, // Pass the real task status
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskSection(List<Map<String, dynamic>> tasks) {
+    String uid = FirebaseAuth.instance.currentUser!.uid;
+
+    DateTime startOfDay =
+        DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 0, 0);
+    DateTime endOfDay = DateTime(
+        _selectedDay.year, _selectedDay.month, _selectedDay.day, 23, 59, 59);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Text(
+              "Tasks for ${DateFormat('EEEE, MMM d').format(_selectedDay)}",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('tasks')
+                .where('startTime',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+                .where('startTime',
+                    isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+                .orderBy('startTime', descending: false)
+                .orderBy('weight', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text("Error loading tasks: ${snapshot.error}");
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    'No tasks available for ${DateFormat('EEEE, MMM d').format(_selectedDay)}.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                );
+              }
+
+              var taskDocs = snapshot.data!.docs.where((task) {
+                Map<String, dynamic> taskData =
+                    task.data() as Map<String, dynamic>;
+                if (selectedFilter == 'All') {
+                  return (taskData['taskType'] == 'personal' &&
+                          taskData['userId'] == uid) ||
+                      ((taskData['taskType'] == 'duo' ||
+                              taskData['taskType'] == 'space') &&
+                          taskData['assignedTo'].contains(uid));
+                } else if (selectedFilter == 'Personal') {
+                  return taskData['userId'] == uid &&
+                      taskData['taskType'] == 'personal';
+                } else if (selectedFilter == 'Shared') {
+                  return taskData['taskType'] == 'duo' &&
+                      taskData['assignedTo'].contains(uid);
+                } else if (selectedFilter == 'Collaboration Space') {
+                  return taskData['taskType'] == 'space' &&
+                      taskData['assignedTo'].contains(uid);
+                }
+                return false;
+              }).toList();
+
+              return ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: taskDocs.length,
+                itemBuilder: (context, index) {
+                  DocumentSnapshot task = taskDocs[index];
+                  Map<String, dynamic> taskData =
+                      task.data() as Map<String, dynamic>;
+                  String taskId = task.id;
+                  DateTime startTime =
+                      (taskData['startTime'] as Timestamp).toDate();
+                  DateTime dueDate =
+                      (taskData['endTime'] as Timestamp).toDate();
+                  String name = taskData['taskName'] ?? 'Unnamed Task';
+                  String taskStatus = taskData.containsKey('status')
+                      ? taskData['status']
+                      : 'Pending'; // Provide default value if status is missing
 
                   String formattedStartTime =
                       DateFormat('yyyy-MM-dd hh:mm a').format(startTime);

@@ -107,7 +107,7 @@ class _AddFriendState extends State<AddFriend> {
       // Load task count
       QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
           .collection('tasks')
-          .where('userId', isEqualTo: widget.userId)
+          .where('assignedTo', arrayContains: widget.userId)
           .get();
       setState(() {
         tasksCount =
@@ -194,6 +194,7 @@ class _AddFriendState extends State<AddFriend> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF2275AA),
+        centerTitle: true,
         title: Text(userName, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -268,26 +269,34 @@ class _AddFriendState extends State<AddFriend> {
   }
 
   Widget _buildFriendRequestButton() {
-    return Center(
-      child: requestStatus == 'pending'
-          ? ElevatedButton(
-              onPressed: _cancelFriendRequest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: SizedBox(
+        width: double.infinity,
+        child: requestStatus == 'pending'
+            ? ElevatedButton(
+                onPressed: _cancelFriendRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2275AA),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                child: const Text(
+                  "Cancel Friend Request",
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            : ElevatedButton(
+                onPressed: _sendFriendRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2275AA),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                child: const Text(
+                  "Send Friend Request",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-              child: const Text("Cancel Friend Request"),
-            )
-          : ElevatedButton(
-              onPressed: _sendFriendRequest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: const Text("Send Friend Request"),
-            ),
+      ),
     );
   }
 

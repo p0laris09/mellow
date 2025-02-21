@@ -11,7 +11,6 @@ class Task {
   String description;
   double priority;
   double urgency;
-  double importance;
   double complexity;
   double weight; // Add a weight property
 
@@ -25,7 +24,6 @@ class Task {
     required this.description,
     required this.priority,
     required this.urgency,
-    required this.importance,
     required this.complexity,
     this.weight = 0.0, // Default weight to 0
   });
@@ -35,13 +33,11 @@ class Task {
     // Ensure max values of 3 are respected
     priority = priority > 3 ? 3 : priority;
     urgency = urgency > 3 ? 3 : urgency;
-    importance = importance > 3 ? 3 : importance;
     complexity = complexity > 3 ? 3 : complexity;
 
     // Weight calculation based on criteria
     weight = (priority * criteriaWeights['priority']!) +
         (urgency * criteriaWeights['urgency']!) +
-        (importance * criteriaWeights['importance']!) +
         (complexity * criteriaWeights['complexity']!);
   }
 
@@ -68,7 +64,6 @@ class Task {
       description: data['description'],
       priority: data['priority'],
       urgency: data['urgency'],
-      importance: data['importance'],
       complexity: data['complexity'],
       taskId: doc.id,
     );
@@ -86,8 +81,7 @@ class TaskManager {
   Map<String, double> criteriaWeights = {
     'priority': 0.4,
     'urgency': 0.3,
-    'importance': 0.2,
-    'complexity': 0.1,
+    'complexity': 0.2,
   };
 
   final double weightLimit = 15.0;

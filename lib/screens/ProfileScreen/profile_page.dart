@@ -108,6 +108,16 @@ class _ProfilePageState extends State<ProfilePage> {
       // Update total task count
       tasksCount = tasksQuery.docs.length;
     });
+
+    // Fetch spaces the user is in
+    final spacesQuery = await firestore
+        .collection('spaces')
+        .where('members', arrayContains: uid)
+        .get();
+
+    setState(() {
+      spaceCount = spacesQuery.docs.length;
+    });
   }
 
   @override

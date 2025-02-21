@@ -14,7 +14,6 @@ class TaskDetailsScreen extends StatefulWidget {
   final String description;
   final String priority;
   final String urgency;
-  final String importance;
   final String complexity;
 
   const TaskDetailsScreen({
@@ -29,7 +28,6 @@ class TaskDetailsScreen extends StatefulWidget {
     required this.description,
     required this.priority,
     required this.urgency,
-    required this.importance,
     required this.complexity,
   });
 
@@ -46,7 +44,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   late String description;
   late String priority;
   late String urgency;
-  late String importance;
   late String complexity;
 
   @override
@@ -65,7 +62,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       description = widget.description;
       priority = widget.priority;
       urgency = widget.urgency;
-      importance = widget.importance;
       complexity = widget.complexity;
     });
   }
@@ -120,17 +116,12 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           },
         ),
         centerTitle: true,
-        flexibleSpace: const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 12.0),
-            child: Text(
-              'Task Details',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        title: const Text(
+          'Task Details',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
@@ -181,7 +172,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                     description: widget.description,
                     priority: double.tryParse(widget.priority) ?? 0.0,
                     urgency: double.tryParse(widget.urgency) ?? 0.0,
-                    importance: double.tryParse(widget.importance) ?? 0.0,
                     complexity: double.tryParse(widget.complexity) ?? 0.0,
                   ),
                 ),
@@ -238,7 +228,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               ),
               child: Text(
                 status,
-                style: const TextStyle(color: Colors.black, fontSize: 16),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
             const SizedBox(height: 24),
@@ -289,8 +279,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             _buildPrioritySection('Priority', _getPriorityLabel(priority)),
             const SizedBox(height: 16),
             _buildPrioritySection('Urgency', _getPriorityLabel(urgency)),
-            const SizedBox(height: 16),
-            _buildPrioritySection('Importance', _getPriorityLabel(importance)),
             const SizedBox(height: 16),
             _buildPrioritySection('Complexity', _getPriorityLabel(complexity)),
 

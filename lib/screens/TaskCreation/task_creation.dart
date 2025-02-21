@@ -35,7 +35,7 @@ class TaskManager {
             priority: data['priority'] ?? 1.0,
             urgency: data['urgency'] ?? 1.0,
             complexity: data['complexity'] ?? 1.0,
-            taskType: data['tasktype']);
+            taskType: data['taskType']);
         task.updateWeight(criteriaWeights); // Pass criteriaWeights
         return task;
       }).toList();
@@ -154,12 +154,20 @@ class TaskManager {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Task Conflict Detected'),
+          title: const Text(
+            'Task Conflict Detected',
+            style: TextStyle(
+              color: Color(0xFF2275AA),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                  'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.'),
+                'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.',
+                style: const TextStyle(color: Colors.black),
+              ),
               const SizedBox(height: 16),
               for (var i = 0; i < bestTimes.length; i++)
                 _buildTimeCard(
@@ -180,9 +188,12 @@ class TaskManager {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // Close dialog without selecting a time
+                Navigator.pop(context); // Close dialog
               },
-              child: const Text('Change Time Manually'),
+              child: const Text(
+                'Change Time Manually',
+                style: TextStyle(color: Color(0xFF2275AA)),
+              ),
             ),
           ],
         );
@@ -211,12 +222,13 @@ class TaskManager {
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
+                color: Color(0xFF2275AA),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               DateFormat('yyyy-MM-dd HH:mm').format(time),
-              style: const TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 14, color: Colors.black),
             ),
             const SizedBox(height: 12),
             Center(
@@ -224,7 +236,7 @@ class TaskManager {
                 onPressed: onSelect,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  backgroundColor: Theme.of(context).primaryColor,
+                  backgroundColor: const Color(0xFF2275AA),
                 ),
                 child: const Text('Choose This Time'),
               ),
