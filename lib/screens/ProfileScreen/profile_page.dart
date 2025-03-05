@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -61,9 +59,19 @@ class _ProfilePageState extends State<ProfilePage> {
         program = data['program'] ?? 'Loading...';
         year = data['year'] ?? 'Loading...';
         tasksCount = data['tasksCount'] ?? 0;
-        friendsCount = data['friendsCount'] ?? 0;
         spaceCount = data['spaceCount'] ?? 0;
         isLoading = false;
+      });
+
+      // Fetch the friend count from the friends_db collection
+      QuerySnapshot friendsSnapshot = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(uid)
+          .collection('friends')
+          .get();
+
+      setState(() {
+        friendsCount = friendsSnapshot.docs.length;
       });
     }
   }
@@ -77,13 +85,34 @@ class _ProfilePageState extends State<ProfilePage> {
     int ongoingTasks = 0;
     int finishedTasks = 0;
 
-    final tasksQuery = await firestore
+    // Query Firestore to fetch all tasks for the user
+    final userTasksQuery = await firestore
         .collection('tasks')
         .where('userId', isEqualTo: uid)
         .get();
 
-    for (var doc in tasksQuery.docs) {
-      final data = doc.data();
+    // Query Firestore to fetch all tasks assigned to the user
+    final assignedTasksQuery = await firestore
+        .collection('tasks')
+        .where('assignedTo', arrayContains: uid)
+        .get();
+
+    // Combine the results
+    final allTasks = userTasksQuery.docs + assignedTasksQuery.docs;
+
+    // Remove duplicates by taskId (if any)
+    Set<String> taskIds = Set();
+    List<QueryDocumentSnapshot> uniqueTasks = [];
+    for (var doc in allTasks) {
+      String taskId = doc.id;
+      if (!taskIds.contains(taskId)) {
+        taskIds.add(taskId);
+        uniqueTasks.add(doc);
+      }
+    }
+
+    for (var doc in uniqueTasks) {
+      final data = doc.data() as Map<String, dynamic>;
       final status = data['status'] ?? '';
       final dueDate =
           (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
@@ -106,7 +135,7 @@ class _ProfilePageState extends State<ProfilePage> {
       finishedCount = finishedTasks;
 
       // Update total task count
-      tasksCount = tasksQuery.docs.length;
+      tasksCount = uniqueTasks.length;
     });
 
     // Fetch spaces the user is in
@@ -208,17 +237,27 @@ class _ProfilePageState extends State<ProfilePage> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
+                                Icon(
+                                  _getTaskCategoryIcon(index),
+                                  size: 40,
+                                  color: _getTaskCategoryColor(index),
+                                ),
+                                const SizedBox(height: 8),
                                 Text(
                                   _getTaskCategoryLabel(index),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
+                                    color: _getTaskCategoryColor(index),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   _getTaskCategoryCount(index).toString(),
-                                  style: const TextStyle(fontSize: 36),
+                                  style: const TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
@@ -296,6 +335,36 @@ class _ProfilePageState extends State<ProfilePage> {
         return finishedCount;
       default:
         return 0;
+    }
+  }
+
+  IconData _getTaskCategoryIcon(int index) {
+    switch (index) {
+      case 0:
+        return Icons.error_outline;
+      case 1:
+        return Icons.play_circle_outline;
+      case 2:
+        return Icons.pending_actions;
+      case 3:
+        return Icons.check_circle_outline;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Color _getTaskCategoryColor(int index) {
+    switch (index) {
+      case 0:
+        return Colors.red;
+      case 1:
+        return Colors.orange;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.green;
+      default:
+        return Colors.grey;
     }
   }
 }

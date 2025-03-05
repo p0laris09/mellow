@@ -107,8 +107,6 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
   ];
   final List<String> _ccapsPrograms = [];
 
-  String? _errorMessage;
-
   List<String> _getPrograms() {
     switch (_selectedCollege) {
       case 'College of Liberal Arts and Science':
@@ -137,18 +135,12 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
   }
 
   void _validateAndNavigate() {
-    setState(() {
-      _errorMessage = null;
-    });
-
     // Check if fields are empty
     if (_selectedCollege == null ||
         _selectedProgram == null ||
         _selectedYear == null ||
         _sectionController.text.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please fill in all required fields!';
-      });
+      _showErrorDialog('Please fill in all required fields!');
       return;
     }
 
@@ -169,6 +161,28 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
           section: _sectionController.text,
         ),
       ),
+    );
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -225,22 +239,6 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                 ),
                 child: Column(
                   children: [
-                    // Error message container
-                    Container(
-                      height: 45,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      alignment: Alignment.center,
-                      child: _errorMessage != null
-                          ? Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 10,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
-                          : null,
-                    ),
                     // University
                     SizedBox(
                       width: 300,
@@ -289,6 +287,8 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                         onChanged: (String? newValue) {
                           setState(() {
                             _selectedCollege = newValue;
+                            _selectedProgram =
+                                null; // Reset program when college changes
                           });
                         },
                         // Custom display for the selected item (using ellipsis)

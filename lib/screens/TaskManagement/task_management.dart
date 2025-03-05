@@ -343,7 +343,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                         pageController: _pageController,
                         startOfWeek: _startOfWeek,
                         getStartOfWeekFromIndex: _getStartOfWeekFromIndex,
-                        buildOverdueSection: _buildOverdueSection,
                         tasksStream: FirebaseFirestore.instance
                             .collection('tasks')
                             .snapshots(),
@@ -397,7 +396,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           var overdueTaskDocs = snapshot.data!.docs.where((task) {
             Map<String, dynamic> taskData = task.data() as Map<String, dynamic>;
             if (selectedFilter == 'All') {
-              return taskData['assignedTo'].contains(uid) ||
+              return (taskData['assignedTo']?.contains(uid) ?? false) ||
                   taskData['userId'] == uid;
             } else if (selectedFilter == 'Personal') {
               return taskData['userId'] == uid &&
@@ -406,7 +405,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
               return taskData['taskType'] == 'duo';
             } else if (selectedFilter == 'Collaboration Space') {
               return taskData['taskType'] == 'space' &&
-                  taskData['assignedTo'].contains(uid);
+                  (taskData['assignedTo']?.contains(uid) ?? false);
             }
             return false;
           }).toList();

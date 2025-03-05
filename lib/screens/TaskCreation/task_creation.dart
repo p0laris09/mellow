@@ -26,16 +26,17 @@ class TaskManager {
       tasks = querySnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data();
         Task task = Task(
-            userId: data['userId'],
-            taskName: data['taskName'],
-            dueDate: (data['dueDate'] as Timestamp).toDate(),
-            startTime: (data['startTime'] as Timestamp).toDate(),
-            endTime: (data['endTime'] as Timestamp).toDate(),
-            description: data['description'] ?? '',
-            priority: data['priority'] ?? 1.0,
-            urgency: data['urgency'] ?? 1.0,
-            complexity: data['complexity'] ?? 1.0,
-            taskType: data['taskType']);
+          userId: data['userId'],
+          taskName: data['taskName'],
+          dueDate: (data['dueDate'] as Timestamp).toDate(),
+          startTime: (data['startTime'] as Timestamp).toDate(),
+          endTime: (data['endTime'] as Timestamp).toDate(),
+          description: data['description'] ?? '',
+          priority: (data['priority'] as num).toDouble(),
+          urgency: (data['urgency'] as num).toDouble(),
+          complexity: (data['complexity'] as num).toDouble(),
+          taskType: data['taskType'],
+        );
         task.updateWeight(criteriaWeights); // Pass criteriaWeights
         return task;
       }).toList();
@@ -107,6 +108,9 @@ class TaskManager {
     double weightLimit,
     Map<String, double> criteriaWeights,
   ) async {
+    // Adjust task details based on existing tasks with the same name
+    adjustTaskDetails(newTask);
+
     // Update the task's weight before checking conflicts
     newTask.updateWeight(criteriaWeights);
 
@@ -134,6 +138,63 @@ class TaskManager {
       // No conflict, add the task directly
       print("No conflict detected, adding the task directly.");
       onTaskResolved(newTask); // Immediately resolve the task
+    }
+  }
+
+  // Automatically adjust task details based on existing tasks with the same name
+  void adjustTaskDetails(Task newTask) {
+    for (var task in tasks) {
+      if (task.userId == newTask.userId && task.taskName == newTask.taskName) {
+        // Adjust priority, urgency, and complexity
+        newTask.priority = task.priority;
+        newTask.urgency = task.urgency;
+        newTask.complexity = task.complexity;
+
+        // Adjust due date, start time, and end time based on the day of the week
+        DateTime now = DateTime.now();
+        DateTime adjustedDueDate = task.dueDate;
+        DateTime adjustedStartTime = task.startTime;
+        DateTime adjustedEndTime = task.endTime;
+
+        // Ensure the adjusted times are in the future
+        if (adjustedDueDate.isBefore(now)) {
+          int daysToAdd = (now.weekday - task.dueDate.weekday) % 7;
+          if (daysToAdd <= 0) {
+            daysToAdd += 7;
+          }
+          adjustedDueDate = now.add(Duration(days: daysToAdd));
+        }
+
+        adjustedStartTime = DateTime(
+          adjustedDueDate.year,
+          adjustedDueDate.month,
+          adjustedDueDate.day,
+          task.startTime.hour,
+          task.startTime.minute,
+        );
+
+        adjustedEndTime = DateTime(
+          adjustedDueDate.year,
+          adjustedDueDate.month,
+          adjustedDueDate.day,
+          task.endTime.hour,
+          task.endTime.minute,
+        );
+
+        // If the adjusted start time is before now, move it to the next day
+        if (adjustedStartTime.isBefore(now)) {
+          adjustedStartTime = adjustedStartTime.add(Duration(days: 1));
+          adjustedEndTime = adjustedEndTime.add(Duration(days: 1));
+        }
+
+        newTask.dueDate = adjustedDueDate;
+        newTask.startTime = adjustedStartTime;
+        newTask.endTime = adjustedEndTime;
+
+        print(
+            'Adjusted task details for "${newTask.taskName}" based on existing task.');
+        break;
+      }
     }
   }
 
@@ -364,15 +425,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
         : null;
 
-    // Define the taskType (personal, duo, or space)
-    String taskType =
-        'personal'; // Set to 'personal' by default, you can change it based on user input
-
     if (taskName.isNotEmpty &&
         dueDate != null &&
         startTime != null &&
         endTime != null) {
-      // Create a new Task object with the provided details
       Task newTask = Task(
         userId: userId,
         taskName: taskName,
@@ -383,61 +439,221 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         priority: _priority,
         urgency: _urgency,
         complexity: _complexity,
-        taskType: taskType, // Add the taskType here
+        taskType: taskType,
       );
 
-      // Initialize the TaskManager
       TaskManager taskManager = TaskManager();
 
-      // Define criteriaWeights
       Map<String, double> criteriaWeights = {
         'priority': _priority,
         'urgency': _urgency,
         'complexity': _complexity,
       };
 
-      // Pass both userId and criteriaWeights when calling loadTasksFromFirestore
       await taskManager.loadTasksFromFirestore(userId, criteriaWeights);
 
-      double weightLimit = 12.1; // Example weight limit
+      // Check for existing tasks with the same name
+      Task? existingTask;
+      try {
+        existingTask = taskManager.tasks.firstWhere(
+          (task) => task.taskName == taskName && task.userId == userId,
+        );
+      } catch (e) {
+        existingTask = null;
+      }
 
-      // Add conflict resolution before task creation
-      await taskManager.addTaskWithConflictResolution(
-        newTask,
-        context,
-        userId,
-        (resolvedTask) async {
-          // Add the resolved task to Firestore
-          await FirebaseFirestore.instance.collection('tasks').add({
-            'taskName': resolvedTask.taskName,
-            'dueDate': Timestamp.fromDate(resolvedTask.dueDate),
-            'startTime': Timestamp.fromDate(resolvedTask.startTime),
-            'endTime': Timestamp.fromDate(resolvedTask.endTime),
-            'description': description,
-            'priority': _priority,
-            'urgency': _urgency,
-            'complexity': _complexity,
-            'weight': resolvedTask.weight,
-            'createdAt': Timestamp.now(),
-            'userId': userId,
-            'status': 'pending',
-            'taskType': taskType, // Add the taskType here in Firestore
-          });
-
-          // Show success message and close the screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task created successfully')),
-          );
-          Navigator.pop(context);
-        },
-        weightLimit,
-        criteriaWeights,
-      );
+      if (existingTask != null) {
+        // Show alert dialog if a matching task is found
+        await _showTaskConflictDialog(
+            newTask, existingTask, taskManager, context);
+      } else {
+        // No conflict, add the task directly
+        await _addTaskToFirestore(newTask, userId);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
     }
+  }
+
+  Future<void> _showTaskConflictDialog(Task newTask, Task existingTask,
+      TaskManager taskManager, BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must tap a button
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'The system identified a task with similar information',
+            style: TextStyle(
+              color: Color(0xFF2275AA), // Match the page primary color
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                const Text(
+                  'You have created a task with the same name before.',
+                  style: TextStyle(color: Colors.black),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Existing Task Details:',
+                  style: TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+                Text('Description: ${newTask.description}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Priority: ${newTask.priority.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Urgency: ${newTask.urgency.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Complexity: ${newTask.complexity.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                const SizedBox(height: 16),
+                const Text(
+                  'Do you want to create the task with the following details?',
+                  style: TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                    'Due Date: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.dueDate)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text(
+                    'Start Time: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.startTime)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text(
+                    'End Time: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.endTime)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Description: ${existingTask.description}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Priority: ${existingTask.priority.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Urgency: ${existingTask.urgency.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Complexity: ${existingTask.complexity.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Create Exactly How I Made It',
+                  style: TextStyle(color: Color(0xFF2275AA))),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _addTaskToFirestore(newTask, newTask.userId);
+              },
+            ),
+            TextButton(
+              child: const Text('Create Task Like This',
+                  style: TextStyle(color: Color(0xFF2275AA))),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                taskManager.adjustTaskDetails(newTask);
+                await _showTaskDetailsDialog(newTask, context);
+              },
+            ),
+            TextButton(
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF2275AA))),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showTaskDetailsDialog(
+      Task newTask, BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must tap a button
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Confirm Task Details',
+            style: TextStyle(
+              color: Color(0xFF2275AA), // Match the page primary color
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                const Text(
+                  'The task will be created with the following details:',
+                  style: TextStyle(color: Colors.black),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                    'Due Date: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.dueDate)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text(
+                    'Start Time: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.startTime)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text(
+                    'End Time: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.endTime)}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Description: ${newTask.description}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Priority: ${newTask.priority.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Urgency: ${newTask.urgency.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+                Text('Complexity: ${newTask.complexity.toInt()}',
+                    style: const TextStyle(color: Colors.black)),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Create Task',
+                  style: TextStyle(color: Color(0xFF2275AA))),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _addTaskToFirestore(newTask, newTask.userId);
+              },
+            ),
+            TextButton(
+              child: const Text('Cancel',
+                  style: TextStyle(color: Color(0xFF2275AA))),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addTaskToFirestore(Task task, String userId) async {
+    await FirebaseFirestore.instance.collection('tasks').add({
+      'taskName': task.taskName,
+      'dueDate': Timestamp.fromDate(task.dueDate),
+      'startTime': Timestamp.fromDate(task.startTime),
+      'endTime': Timestamp.fromDate(task.endTime),
+      'description': task.description,
+      'priority': task.priority,
+      'urgency': task.urgency,
+      'complexity': task.complexity,
+      'weight': task.weight,
+      'createdAt': Timestamp.now(),
+      'userId': userId,
+      'status': 'pending',
+      'taskType': task.taskType,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Task created successfully')),
+    );
+    Navigator.pop(context);
   }
 
   @override

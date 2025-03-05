@@ -57,8 +57,8 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
                 // Navigate to messages screen when selectedIndex is 4
                 Navigator.pushNamed(context, '/messages');
               } else {
-                // Navigate to task creation screen for other cases
-                Navigator.pushNamed(context, '/taskCreation');
+                // Show task creation dialog for other cases
+                _showTaskCreationDialog(context);
               }
             },
             icon: Icon(
@@ -95,6 +95,72 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         const SizedBox(width: 10),
       ],
+    );
+  }
+
+  void _showTaskCreationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA), // Blue background color
+          title: const Center(
+            child: Text(
+              'Task Creation',
+              style: TextStyle(
+                color: Colors.white, // White text color
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text(
+                  'Create a Personal Task',
+                  style: TextStyle(color: Colors.white), // White text color
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/taskCreation');
+                },
+              ),
+              ListTile(
+                title: const Text(
+                  'Create a Duo Task',
+                  style: TextStyle(color: Colors.white), // White text color
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/createDuoTask');
+                },
+              ),
+              ListTile(
+                title: const Text(
+                  'Create a Space Task',
+                  style: TextStyle(color: Colors.white), // White text color
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/createSpaceTask');
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white), // White text color
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

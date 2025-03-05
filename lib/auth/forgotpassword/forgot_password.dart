@@ -19,9 +19,7 @@ class _ForgotPasswordState extends State<ForgotPassword> {
   Future<void> sendPasswordResetLink() async {
     final String email = _emailController.text.trim(); // Get email from input
     if (email.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter your email';
-      });
+      _showErrorDialog('Please enter your email');
       return;
     }
 
@@ -38,25 +36,45 @@ class _ForgotPasswordState extends State<ForgotPassword> {
         ),
       );
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error: $e';
-      });
+      _showErrorDialog('Error: $e');
     }
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2C3C3C),
+      backgroundColor: const Color(0xFF2275AA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2C3C3C),
+        backgroundColor: const Color(0xFF2275AA),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => SignInPage()),
+              MaterialPageRoute(builder: (context) => const SignInPage()),
               (route) => false,
             );
           },
@@ -152,7 +170,7 @@ class _ForgotPasswordState extends State<ForgotPassword> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: const Color(0xFF2C3C3C),
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
                         child: const Text(
                           "SUBMIT",

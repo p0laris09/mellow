@@ -19,9 +19,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _birthdayController = TextEditingController();
 
-  String? _errorMessage;
   DateTime? _selectedDate;
-
   String? _selectedGender;
   final List<String> _gender = [
     'Male',
@@ -77,18 +75,12 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
   }
 
   void _validateAndNavigate() {
-    setState(() {
-      _errorMessage = null; // Clear previous error message
-    });
-
     // Check if required fields are empty
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
         _birthdayController.text.isEmpty ||
         _selectedGender == null) {
-      setState(() {
-        _errorMessage = 'Please fill in all required fields!';
-      });
+      _showErrorDialog('Please fill in all required fields!');
       return;
     }
 
@@ -97,18 +89,14 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
     try {
       birthday = DateFormat('MM/dd/yyyy').parse(_birthdayController.text);
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Invalid date format! Please use MM/DD/YYYY.';
-      });
+      _showErrorDialog('Invalid date format! Please use MM/DD/YYYY.');
       return;
     }
 
     // Validate age
     int age = _calculateAge(birthday);
     if (age < 18 || age > 50) {
-      setState(() {
-        _errorMessage = 'Age must be between 18 and 50 years.';
-      });
+      _showErrorDialog('Age must be between 18 and 50 years.');
       return;
     }
 
@@ -124,6 +112,28 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
           gender: _selectedGender!,
         ),
       ),
+    );
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -206,21 +216,6 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                 ),
                 child: Column(
                   children: [
-                    Container(
-                      height: 45,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      alignment: Alignment.center,
-                      child: _errorMessage != null
-                          ? Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 10,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
-                          : null,
-                    ),
                     SizedBox(
                       width: 300,
                       child: TextField(

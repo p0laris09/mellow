@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:mellow/NetworkPage/no_network_page.dart';
 import 'package:mellow/auth/auth_page.dart';
 import 'package:mellow/auth/forgotpassword/fp_emailsent.dart';
 import 'package:mellow/auth/signin/sign_in.dart';
@@ -16,13 +20,15 @@ import 'package:mellow/screens/ProfileScreen/SearchFriendsScreen/search_friends.
 import 'package:mellow/screens/ProfileScreen/profile_page.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateEmail/email_update.dart';
 import 'package:mellow/screens/SettingsScreen/ChangePassword/change_password.dart';
-import 'package:mellow/screens/SettingsScreen/PrivacyPolicy/privacy_policy.dart';
+import 'package:mellow/screens/Policies/PrivacyPolicy/privacy_policy.dart';
 import 'package:mellow/screens/SettingsScreen/ReportBugs/reportbugs_screen.dart';
 import 'package:mellow/screens/SettingsScreen/SendFeedbackScreen/sendfeedback_screen.dart';
-import 'package:mellow/screens/SettingsScreen/TermsOfService/terms_of_service.dart';
+import 'package:mellow/screens/Policies/TermsOfService/terms_of_service.dart';
 import 'package:mellow/screens/SettingsScreen/settings_drawer.dart';
 import 'package:mellow/screens/SettingsScreen/settings_page.dart';
 import 'package:mellow/screens/TaskCreation/task_creation.dart';
+import 'package:mellow/screens/TaskCreation/task_creation_duo.dart';
+import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
 import 'package:mellow/screens/TaskManagement/TaskHistory/task_history.dart';
 import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:provider/provider.dart';
@@ -61,7 +67,7 @@ Future<void> _initializeNotifications() async {
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
   // Initialization settings for all platforms
-  final InitializationSettings initializationSettings =
+  const InitializationSettings initializationSettings =
       InitializationSettings(android: initializationSettingsAndroid);
 
   // Initialize the plugin with the new callback
@@ -114,11 +120,10 @@ class MellowApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.grey),
         ),
       ),
-      home:
-          const AuthPage(), // This will be replaced by the splash screen initially
+      home: const NetworkCheckWrapper(),
       routes: {
         '/signin': (context) => const SignInPage(),
-        '/emailVerification': (context) => EmailVerification(),
+        '/emailVerification': (context) => const EmailVerification(),
         '/signup': (context) => const SignUpPersonalDetails(),
         '/dashboard': (context) {
           User? user = FirebaseAuth.instance.currentUser;
@@ -130,6 +135,8 @@ class MellowApp extends StatelessWidget {
         },
         '/profile': (context) => const ProfilePage(),
         '/taskCreation': (context) => const TaskCreationScreen(),
+        '/createDuoTask': (context) => const TaskCreationDuo(),
+        '/createSpaceTask': (context) => const TaskCreationSpace(),
         '/taskManagement': (context) => const TaskManagementScreen(),
         '/emailSent': (context) => const ForgotPasswordEmailSent(),
         '/notification': (context) => const NotificationScreen(),
@@ -144,7 +151,58 @@ class MellowApp extends StatelessWidget {
         '/sendfeedback': (context) => const SendfeedbackScreen(),
         '/reportbugs': (context) => const ReportBugsScreen(),
         '/taskhistory': (context) => const TaskHistory(),
+        '/no_network': (context) => NoNetworkPage(),
       },
     );
+  }
+}
+
+class NetworkCheckWrapper extends StatefulWidget {
+  const NetworkCheckWrapper({super.key});
+
+  @override
+  _NetworkCheckWrapperState createState() => _NetworkCheckWrapperState();
+}
+
+class _NetworkCheckWrapperState extends State<NetworkCheckWrapper> {
+  late StreamSubscription<List<ConnectivityResult>> _subscription;
+  bool _isConnected = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialConnection();
+    _subscription = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> result) {
+      setState(() {
+        _isConnected =
+            result.isNotEmpty && result.first != ConnectivityResult.none;
+      });
+      if (!_isConnected) {
+        navigatorKey.currentState?.pushReplacementNamed('/no_network');
+      }
+    });
+  }
+
+  Future<void> _checkInitialConnection() async {
+    final result = await Connectivity().checkConnectivity();
+    setState(() {
+      _isConnected = result != ConnectivityResult.none;
+    });
+    if (!_isConnected) {
+      navigatorKey.currentState?.pushReplacementNamed('/no_network');
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _isConnected ? const AuthPage() : NoNetworkPage();
   }
 }

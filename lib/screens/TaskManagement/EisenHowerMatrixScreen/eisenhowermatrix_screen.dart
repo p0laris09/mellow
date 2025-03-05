@@ -6,7 +6,6 @@ class EisenhowerMatrixView extends StatefulWidget {
   final PageController pageController;
   final DateTime startOfWeek;
   final DateTime Function(int) getStartOfWeekFromIndex;
-  final Widget Function() buildOverdueSection;
   final Stream<QuerySnapshot> tasksStream;
   final String selectedFilter;
 
@@ -14,7 +13,6 @@ class EisenhowerMatrixView extends StatefulWidget {
     required this.pageController,
     required this.startOfWeek,
     required this.getStartOfWeekFromIndex,
-    required this.buildOverdueSection,
     required this.tasksStream,
     required this.selectedFilter,
     Key? key,
@@ -38,8 +36,6 @@ class _EisenhowerMatrixViewState extends State<EisenhowerMatrixView> {
     return Column(
       children: [
         const SizedBox(height: 2),
-        widget.buildOverdueSection(),
-        const SizedBox(height: 16),
         Expanded(
           child: _buildEisenhowerMatrix(),
         ),
