@@ -21,6 +21,7 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
   final TextEditingController _endTimeController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
+  String taskType = 'space'; // Default task type is space
   List<String> selectedMembers = [];
   Map<String, String> memberNamesMap = {}; // Map UID to name
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -31,7 +32,8 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
   double _complexity = 1;
 
   String? _selectedSpace; // Add a variable to hold the selected space
-  List<String> _spaces = []; // Add a list to hold the available spaces
+  List<Map<String, String>> _spaces =
+      []; // Add a list to hold the available spaces
 
   // Initialize TaskManager
   late TaskManager taskManager;
@@ -66,12 +68,17 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
           .get();
 
       setState(() {
-        _spaces =
-            querySnapshot.docs.map((doc) => doc['name'] as String).toList();
+        _spaces = querySnapshot.docs.map((doc) {
+          return {
+            'id': doc.id as String,
+            'name': doc['name'] as String,
+          };
+        }).toList();
       });
 
       if (_spaces.isNotEmpty) {
-        _selectedSpace = _spaces.first; // Set the first space as selected
+        _selectedSpace =
+            _spaces.first['id']; // Set the first space ID as selected
       }
     } catch (e) {
       print('Error loading spaces: $e');
@@ -87,17 +94,17 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
     }
 
     try {
-      // Fetch the space document
+      // Fetch the space document using the space ID
       final spaceDoc = await FirebaseFirestore.instance
           .collection('spaces')
-          .where('name', isEqualTo: _selectedSpace)
+          .doc(_selectedSpace)
           .get();
-      if (spaceDoc.docs.isEmpty) {
+      if (!spaceDoc.exists) {
         print('Space not found');
         return;
       }
 
-      final spaceData = spaceDoc.docs.first.data();
+      final spaceData = spaceDoc.data()!;
 
       // Get members from the space document
       List<String> memberUids = List<String>.from(spaceData['members'] ?? []);
@@ -293,109 +300,127 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
   }
 
   Future<void> _createTaskInFirestore() async {
-    Future<void> _createTaskInFirestore() async {
-      String taskName = _taskNameController.text;
-      String dueDateString = _dueDateController.text;
-      String startTimeString = _startTimeController.text;
-      String endTimeString = _endTimeController.text;
-      String description = _descriptionController.text;
-      String? userId = FirebaseAuth
-          .instance.currentUser?.uid; // This is the user creating the task
-      String? spaceId = _selectedSpace; // Use the selected space ID
-      List<String> assignedTo =
-          selectedMembers; // Use the local selectedMembers list
+    String taskName = _taskNameController.text;
+    String dueDateString = _dueDateController.text;
+    String startTimeString = _startTimeController.text;
+    String endTimeString = _endTimeController.text;
+    String description = _descriptionController.text;
+    String? userId = FirebaseAuth
+        .instance.currentUser?.uid; // This is the user creating the task
+    String? spaceId = _selectedSpace; // Use the selected space ID
+    List<String> assignedTo =
+        selectedMembers; // Use the local selectedMembers list
 
-      if (userId == null) {
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    if (assignedTo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please assign the task to at least one member')),
+      );
+      return;
+    }
+
+    DateTime? dueDate = dueDateString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
+        : null;
+    DateTime? startTime = startTimeString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(startTimeString)
+        : null;
+    DateTime? endTime = endTimeString.isNotEmpty
+        ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
+        : null;
+
+    if (taskName.isNotEmpty &&
+        dueDate != null &&
+        startTime != null &&
+        endTime != null &&
+        spaceId != null) {
+      // Determine the task type
+      String taskType = 'space'; // Assuming this is a space task
+
+      // Create a new Task object with both userId and spaceId
+      Task newTask = Task(
+        userId: userId, // Store userId (creator's ID)
+        spaceId: spaceId, // Store spaceId
+        taskName: taskName,
+        dueDate: dueDate,
+        startTime: startTime,
+        endTime: endTime,
+        description: description,
+        priority: _priority,
+        urgency: _urgency,
+        complexity: _complexity,
+        assignedTo: assignedTo,
+      );
+
+      // Calculate the weight of the task
+      newTask.updateWeight(taskManager.criteriaWeights);
+
+      // Add the task to TaskManager
+      taskManager.addTask(newTask);
+
+      // Apply Eisenhower Matrix
+      taskManager.applyEisenhowerMatrix();
+
+      // Debugging: Print task details
+      print('Task created: ${newTask.toString()}');
+
+      try {
+        // Add the task to Firestore
+        final taskDocRef =
+            await FirebaseFirestore.instance.collection('tasks').add({
+          'userId': userId,
+          'spaceId': spaceId,
+          'taskName': taskName,
+          'dueDate': dueDate,
+          'startTime': startTime,
+          'endTime': endTime,
+          'description': description,
+          'priority': _priority,
+          'urgency': _urgency,
+          'complexity': _complexity,
+          'weight': newTask.weight, // Include the weight field
+          'assignedTo': assignedTo,
+          'taskType': taskType, // Include the taskType field
+          'createdAt': FieldValue.serverTimestamp(), // Add createdAt field
+        });
+
+        // Create activity for the task creation
+        final activityData = {
+          'spaceId': spaceId,
+          'createdBy': userId,
+          'taskName': taskName,
+          'assignedTo': assignedTo,
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': 'task_created',
+        };
+
+        await FirebaseFirestore.instance
+            .collection('activities')
+            .add(activityData);
+
+        // Show success message and close the screen
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not authenticated')),
+          const SnackBar(content: Text('Task created successfully')),
         );
-        return;
-      }
-
-      if (assignedTo.isEmpty) {
+        Navigator.pop(context);
+      } catch (e) {
+        // Log the error and show an error message
+        print('Error creating task: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Please assign the task to at least one member')),
-        );
-        return;
-      }
-
-      DateTime? dueDate = dueDateString.isNotEmpty
-          ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
-          : null;
-      DateTime? startTime = startTimeString.isNotEmpty
-          ? DateFormat('yyyy-MM-dd HH:mm').parse(startTimeString)
-          : null;
-      DateTime? endTime = endTimeString.isNotEmpty
-          ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
-          : null;
-
-      if (taskName.isNotEmpty &&
-          dueDate != null &&
-          startTime != null &&
-          endTime != null &&
-          spaceId != null) {
-        // Create a new Task object with both userId and spaceId
-        Task newTask = Task(
-          userId: userId, // Store userId (creator's ID)
-          spaceId: spaceId, // Store spaceId
-          taskName: taskName,
-          dueDate: dueDate,
-          startTime: startTime,
-          endTime: endTime,
-          description: description,
-          priority: _priority,
-          urgency: _urgency,
-          complexity: _complexity,
-          assignedTo: assignedTo,
-        );
-
-        // Calculate the weight of the task
-        newTask.updateWeight(taskManager.criteriaWeights);
-
-        // Add the task to TaskManager
-        taskManager.addTask(newTask);
-
-        // Apply Eisenhower Matrix
-        taskManager.applyEisenhowerMatrix();
-
-        // Debugging: Print task details
-        print('Task created: ${newTask.toString()}');
-
-        try {
-          // Optionally, add the task to Firestore
-          await FirebaseFirestore.instance.collection('tasks').add({
-            'userId': userId,
-            'spaceId': spaceId,
-            'taskName': taskName,
-            'dueDate': dueDate,
-            'startTime': startTime,
-            'endTime': endTime,
-            'description': description,
-            'priority': _priority,
-            'urgency': _urgency,
-            'complexity': _complexity,
-            'weight': newTask.weight, // Include the weight field
-            'assignedTo': assignedTo,
-          });
-
-          // Show success message and close the screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task created successfully')),
-          );
-          Navigator.pop(context);
-        } catch (e) {
-          // Log the error and show an error message
-          print('Error creating task: $e');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error creating task: $e')),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fill in all fields')),
+          SnackBar(content: Text('Error creating task: $e')),
         );
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
     }
   }
 
@@ -507,9 +532,9 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
                       value: _selectedSpace,
                       items: _spaces.map((space) {
                         return DropdownMenuItem<String>(
-                          value: space,
+                          value: space['id'],
                           child: Text(
-                            space,
+                            space['name']!,
                             style: const TextStyle(
                               color: Colors
                                   .black, // Set text color to black when choosing
@@ -521,7 +546,7 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
                       selectedItemBuilder: (BuildContext context) {
                         return _spaces.map((space) {
                           return Text(
-                            space,
+                            space['name']!,
                             style: const TextStyle(
                               color: Colors
                                   .white, // Set text color to white when selected

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
+import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 
 class SpaceTasksScreen extends StatefulWidget {
   final String spaceId;
@@ -395,8 +396,22 @@ class _SpaceTasksScreenState extends State<SpaceTasksScreen> {
                   final tasks = snapshot.data!.docs.where((taskDoc) {
                     final task = taskDoc.data() as Map<String, dynamic>;
                     // Filter tasks based on the quadrant
-                    // Implement your filtering logic here
-                    return true; // Placeholder, replace with actual logic
+                    switch (title) {
+                      case "Urgent & Important":
+                        return task['urgent'] == true &&
+                            task['important'] == true;
+                      case "Not Urgent & Important":
+                        return task['urgent'] == false &&
+                            task['important'] == true;
+                      case "Urgent & Not Important":
+                        return task['urgent'] == true &&
+                            task['important'] == false;
+                      case "Not Urgent & Not Important":
+                        return task['urgent'] == false &&
+                            task['important'] == false;
+                      default:
+                        return false;
+                    }
                   }).toList();
 
                   return ListView.builder(
@@ -441,12 +456,14 @@ class _SpaceTasksScreenState extends State<SpaceTasksScreen> {
           itemCount: tasks.length,
           itemBuilder: (context, index) {
             final task = tasks[index].data() as Map<String, dynamic>;
-            return ListTile(
-              title: Text(task['taskName'] ?? 'Unnamed Task'),
-              subtitle: Text(
-                'Assigned to: ${task['assignedTo']?.join(", ") ?? "Unassigned"}\n'
-                'Date Created: ${(task['createdAt'] as Timestamp?)?.toDate().toString() ?? "Unknown"}',
-              ),
+            return TaskCard(
+              taskId: tasks[index].id,
+              taskName: task['taskName'] ?? 'Unnamed Task',
+              dueDate: (task['dueDate'] as Timestamp).toDate().toString(),
+              startTime: (task['startTime'] as Timestamp).toDate().toString(),
+              startDateTime: (task['startTime'] as Timestamp).toDate(),
+              dueDateTime: (task['dueDate'] as Timestamp).toDate(),
+              taskStatus: task['status'] ?? 'Pending',
             );
           },
         );

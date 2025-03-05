@@ -1,9 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mellow/auth/forgotpassword/forgot_password.dart';
 import 'package:mellow/auth/onboarding/onboarding.dart';
 import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
+import 'package:mellow/screens/TaskPreference/task_preference_screen.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -16,18 +18,11 @@ class _SignInPageState extends State<SignInPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscureText = true;
-  String? _errorMessage;
 
   Future<void> signIn() async {
-    setState(() {
-      _errorMessage = null; // Clear previous error message
-    });
-
     // Check if fields are empty
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please fill in all fields!';
-      });
+      _showErrorDialog('Please fill in all fields!');
       return;
     }
 
@@ -45,29 +40,63 @@ class _SignInPageState extends State<SignInPage> {
       if (user != null) {
         // Check if the email is verified
         if (user.emailVerified) {
-          // Navigate to the regular DashboardScreen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const DashboardScreen(),
-            ),
-          );
+          // Check if the user has task preferences set up
+          DocumentSnapshot taskPreferenceSnapshot = await FirebaseFirestore
+              .instance
+              .collection('task_preference')
+              .doc(user.uid)
+              .get();
+
+          if (taskPreferenceSnapshot.exists) {
+            // Navigate to the regular DashboardScreen
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DashboardScreen(),
+              ),
+            );
+          } else {
+            // Navigate to the TaskPreferenceScreen
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const TaskPreferenceScreen(),
+              ),
+            );
+          }
         } else {
           // Sign out the user
           await FirebaseAuth.instance.signOut();
 
           // Show error message
-          setState(() {
-            _errorMessage = 'Please verify your email before signing in.';
-          });
+          _showErrorDialog('Please verify your email before signing in.');
         }
       }
     } catch (e) {
-      setState(() {
-        _errorMessage =
-            'Password and email do not match!'; // Set the error message
-      });
+      _showErrorDialog('Password and email do not match!');
     }
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -85,7 +114,7 @@ class _SignInPageState extends State<SignInPage> {
             // Navigate back to the onboarding page
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => OnboardingPage()),
+              MaterialPageRoute(builder: (context) => const OnboardingPage()),
               (route) => false, // Remove all previous routes
             );
           },
@@ -135,24 +164,6 @@ class _SignInPageState extends State<SignInPage> {
                 ),
                 child: Column(
                   children: [
-                    // Error message container
-                    Container(
-                      height: 40, // Fixed height for error message
-                      margin: const EdgeInsets.only(
-                          bottom: 16), // Add some space below the error message
-                      alignment: Alignment.center,
-                      child: _errorMessage != null
-                          ? Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
-                          : null,
-                    ),
-
                     // Email TextField with fixed width
                     SizedBox(
                       width: 300, // Set your desired width here
@@ -276,7 +287,7 @@ class _SignInPageState extends State<SignInPage> {
                                 context,
                                 MaterialPageRoute(
                                     builder: (context) =>
-                                        SignUpPersonalDetails()),
+                                        const SignUpPersonalDetails()),
                               );
                             },
                             child: const Text(

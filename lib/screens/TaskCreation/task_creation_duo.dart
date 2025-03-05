@@ -20,9 +20,7 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
   String? _selectedFriends;
 
   final List<String> _friends = [
-    'TK',
-    'Max',
-    'Emma',
+    // Add friends here
   ];
 
   int _descriptionCharCount = 0;
@@ -106,6 +104,25 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
     }
   }
 
+  void _createTask() {
+    if (_taskNameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task name cannot be empty.')),
+      );
+      return;
+    }
+
+    if (_selectedFriends == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please select a friend to share the task with.')),
+      );
+      return;
+    }
+
+    // Implement task creation logic here
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,50 +179,60 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                   const SizedBox(height: 9),
                   SizedBox(
                     width: 300,
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedFriends,
-                      dropdownColor: Colors.blueGrey,
-                      decoration: const InputDecoration(
-                        labelText: "Share with",
-                        labelStyle: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        border: UnderlineInputBorder(),
-                      ),
-                      items: _friends.map((String friends) {
-                        return DropdownMenuItem<String>(
-                          value: friends,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 250),
-                            child: Text(
-                              friends,
-                              overflow: TextOverflow.visible,
-                              maxLines: null,
-                              style: const TextStyle(color: Colors.white),
+                    child: _friends.isEmpty
+                        ? const Text(
+                            "No friends to share task",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
+                          )
+                        : DropdownButtonFormField<String>(
+                            value: _selectedFriends,
+                            dropdownColor: Colors.blueGrey,
+                            decoration: const InputDecoration(
+                              labelText: "Share with",
+                              labelStyle: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              border: UnderlineInputBorder(),
+                            ),
+                            items: _friends.map((String friends) {
+                              return DropdownMenuItem<String>(
+                                value: friends,
+                                child: ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 250),
+                                  child: Text(
+                                    friends,
+                                    overflow: TextOverflow.visible,
+                                    maxLines: null,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _selectedFriends = newValue;
+                              });
+                            },
+                            selectedItemBuilder: (BuildContext context) {
+                              return _friends.map((String friends) {
+                                return ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 250),
+                                  child: Text(
+                                    friends,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                );
+                              }).toList();
+                            },
+                            menuMaxHeight: 300,
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedFriends = newValue;
-                        });
-                      },
-                      selectedItemBuilder: (BuildContext context) {
-                        return _friends.map((String friends) {
-                          return ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 250),
-                            child: Text(
-                              friends,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          );
-                        }).toList();
-                      },
-                      menuMaxHeight: 300,
-                    ),
                   ),
                 ],
               ),
@@ -372,9 +399,7 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                   const SizedBox(height: 45),
                   Center(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Implement task creation logic here
-                      },
+                      onPressed: _createTask,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 50,

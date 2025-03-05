@@ -20,11 +20,15 @@ class _AddFriendState extends State<AddFriend> {
   String college = 'Loading...';
   String program = 'Loading...';
   String year = 'Loading...';
+  int overdueCount = 0;
+  int pendingCount = 0;
+  int ongoingCount = 0;
+  int finishedCount = 0;
+  bool isLoading = true;
+  String errorMessage = '';
   String tasksCount = '0';
   String spaceCount = '0';
   String friendsCount = '0';
-  bool isLoading = true;
-  String errorMessage = '';
 
   @override
   void initState() {
@@ -38,7 +42,8 @@ class _AddFriendState extends State<AddFriend> {
       currentUserId = currentUser.uid;
       await _loadUserProfile();
       await _checkFriendRequestStatus();
-      await _loadCounts();
+      await _loadTaskCounts();
+      await _loadFriendsCount();
     }
   }
 
@@ -102,43 +107,70 @@ class _AddFriendState extends State<AddFriend> {
     }
   }
 
-  Future<void> _loadCounts() async {
+  Future<void> _loadTaskCounts() async {
     try {
-      // Load task count
+      // Load task counts
       QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: widget.userId)
           .get();
-      setState(() {
-        tasksCount =
-            tasksSnapshot.size > 0 ? tasksSnapshot.size.toString() : '0';
-      });
 
-      // Load collaboration space count
-      QuerySnapshot spacesSnapshot = await FirebaseFirestore.instance
-          .collection('spaces')
-          .where('members', arrayContains: widget.userId)
-          .get();
-      setState(() {
-        spaceCount =
-            spacesSnapshot.size > 0 ? spacesSnapshot.size.toString() : '0';
-      });
+      int overdueTasks = 0;
+      int pendingTasks = 0;
+      int ongoingTasks = 0;
+      int finishedTasks = 0;
 
+      for (var doc in tasksSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = data['status'] ?? '';
+        final dueDate =
+            (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+        if (dueDate.isBefore(DateTime.now()) && status != 'Finished') {
+          overdueTasks++;
+        } else if (status == 'pending') {
+          pendingTasks++;
+        } else if (status == 'ongoing') {
+          ongoingTasks++;
+        } else if (status == 'Finished') {
+          finishedTasks++;
+        }
+      }
+
+      setState(() {
+        overdueCount = overdueTasks;
+        pendingCount = pendingTasks;
+        ongoingCount = ongoingTasks;
+        finishedCount = finishedTasks;
+        tasksCount = tasksSnapshot.docs.length.toString();
+      });
+    } catch (e) {
+      print('Error loading task counts: $e');
+      setState(() {
+        overdueCount = 0;
+        pendingCount = 0;
+        ongoingCount = 0;
+        finishedCount = 0;
+        tasksCount = '0';
+      });
+    }
+  }
+
+  Future<void> _loadFriendsCount() async {
+    try {
       // Load friends count
       QuerySnapshot friendsSnapshot = await FirebaseFirestore.instance
           .collection('friends_db')
           .doc(widget.userId)
           .collection('friends')
           .get();
+
       setState(() {
-        friendsCount =
-            friendsSnapshot.size > 0 ? friendsSnapshot.size.toString() : '0';
+        friendsCount = friendsSnapshot.docs.length.toString();
       });
     } catch (e) {
-      print('Error loading counts: $e');
+      print('Error loading friends count: $e');
       setState(() {
-        tasksCount = '0';
-        spaceCount = '0';
         friendsCount = '0';
       });
     }
@@ -152,6 +184,19 @@ class _AddFriendState extends State<AddFriend> {
         .doc(currentUserId)
         .set({
       'fromUserId': currentUserId,
+      'toUserId': widget.userId,
+      'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await FirebaseFirestore.instance
+        .collection('friends_db')
+        .doc(currentUserId)
+        .collection('requests')
+        .doc(widget.userId)
+        .set({
+      'fromUserId': currentUserId,
+      'toUserId': widget.userId,
       'status': 'pending',
       'timestamp': FieldValue.serverTimestamp(),
     });
@@ -172,6 +217,25 @@ class _AddFriendState extends State<AddFriend> {
         .doc(currentUserId)
         .delete();
 
+    await FirebaseFirestore.instance
+        .collection('friends_db')
+        .doc(currentUserId)
+        .collection('requests')
+        .doc(widget.userId)
+        .delete();
+
+    // Delete the notification
+    QuerySnapshot notificationsSnapshot = await FirebaseFirestore.instance
+        .collection('notifications')
+        .where('receiverId', isEqualTo: widget.userId)
+        .where('title', isEqualTo: 'Friend Request')
+        .where('message', isEqualTo: 'You have a new friend request.')
+        .get();
+
+    for (var doc in notificationsSnapshot.docs) {
+      await doc.reference.delete();
+    }
+
     setState(() {
       requestStatus = 'none';
     });
@@ -179,14 +243,17 @@ class _AddFriendState extends State<AddFriend> {
 
   Future<void> _sendNotification(
       String receiverId, String title, String message) async {
-    await FirebaseFirestore.instance.collection('notifications').add({
-      'receiverId': receiverId,
-      'title': title,
-      'message': message,
-      'timestamp': FieldValue.serverTimestamp(),
-      'status':
-          requestStatus == 'pending' ? 'Request Sent' : 'Request Canceled',
-    });
+    if (receiverId != currentUserId) {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'receiverId': receiverId,
+        'title': title,
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'friend request',
+        'status':
+            requestStatus == 'pending' ? 'Request Sent' : 'Request Canceled',
+      });
+    }
   }
 
   @override
@@ -194,6 +261,7 @@ class _AddFriendState extends State<AddFriend> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF2275AA),
+        centerTitle: true,
         title: Text(userName, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -248,12 +316,16 @@ class _AddFriendState extends State<AddFriend> {
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.black)),
+                  const SizedBox(height: 8),
                   Text('Section: $userSection',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('College: $college',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('Program: $program',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('Year: $year',
                       style: const TextStyle(color: Colors.black)),
                 ],
@@ -261,33 +333,160 @@ class _AddFriendState extends State<AddFriend> {
             ),
             const SizedBox(height: 20),
             _buildFriendRequestButton(),
+            const SizedBox(height: 20),
+            _buildTaskCards(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFriendRequestButton() {
-    return Center(
-      child: requestStatus == 'pending'
-          ? ElevatedButton(
-              onPressed: _cancelFriendRequest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: const Text("Cancel Friend Request"),
-            )
-          : ElevatedButton(
-              onPressed: _sendFriendRequest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: const Text("Send Friend Request"),
+  Widget _buildTaskCards() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: 4,
+      itemBuilder: (context, index) {
+        return Card(
+          elevation: 5,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _getTaskCategoryIcon(index),
+                  size: 40,
+                  color: _getTaskCategoryColor(index),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _getTaskCategoryLabel(index),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _getTaskCategoryColor(index),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _getTaskCategoryCount(index).toString(),
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getTaskCategoryLabel(int index) {
+    switch (index) {
+      case 0:
+        return 'Overdue';
+      case 1:
+        return 'Ongoing';
+      case 2:
+        return 'Pending';
+      case 3:
+        return 'Finished';
+      default:
+        return '';
+    }
+  }
+
+  int _getTaskCategoryCount(int index) {
+    switch (index) {
+      case 0:
+        return overdueCount;
+      case 1:
+        return ongoingCount;
+      case 2:
+        return pendingCount;
+      case 3:
+        return finishedCount;
+      default:
+        return 0;
+    }
+  }
+
+  IconData _getTaskCategoryIcon(int index) {
+    switch (index) {
+      case 0:
+        return Icons.error_outline;
+      case 1:
+        return Icons.play_circle_outline;
+      case 2:
+        return Icons.pending_actions;
+      case 3:
+        return Icons.check_circle_outline;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Color _getTaskCategoryColor(int index) {
+    switch (index) {
+      case 0:
+        return Colors.red;
+      case 1:
+        return Colors.orange;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildFriendRequestButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1.0),
+      child: SizedBox(
+        width: double.infinity,
+        child: requestStatus == 'pending'
+            ? ElevatedButton(
+                onPressed: _cancelFriendRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2275AA),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8), // Rounded corners
+                  ),
+                ),
+                child: const Text(
+                  "Cancel Friend Request",
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            : ElevatedButton(
+                onPressed: _sendFriendRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2275AA),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8), // Rounded corners
+                  ),
+                ),
+                child: const Text(
+                  "Send Friend Request",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+      ),
     );
   }
 

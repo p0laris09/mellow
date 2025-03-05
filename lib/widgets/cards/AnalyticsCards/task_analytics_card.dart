@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mellow/screens/AnalyticsScreen/ViewAnalytics/view_analytics_screen.dart';
+import 'package:mellow/screens/AnalyticsScreen/analytics_screen.dart';
 
 class TaskAnalyticsCard extends StatefulWidget {
   final int totalTasks; // Add totalTasks parameter
@@ -36,14 +37,34 @@ class _TaskAnalyticsCardState extends State<TaskAnalyticsCard> {
       if (uid == null) throw Exception("User not logged in");
 
       // Query Firestore to fetch all tasks for the user
-      final querySnapshot = await FirebaseFirestore.instance
+      final userTasksQuery = await FirebaseFirestore.instance
           .collection('tasks')
           .where('userId', isEqualTo: uid)
           .get();
 
+      // Query Firestore to fetch all tasks assigned to the user
+      final assignedTasksQuery = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedTo', arrayContains: uid)
+          .get();
+
+      // Combine the results
+      final allTasks = userTasksQuery.docs + assignedTasksQuery.docs;
+
+      // Remove duplicates by taskId (if any)
+      Set<String> taskIds = Set();
+      List<QueryDocumentSnapshot> uniqueTasks = [];
+      for (var doc in allTasks) {
+        String taskId = doc.id;
+        if (!taskIds.contains(taskId)) {
+          taskIds.add(taskId);
+          uniqueTasks.add(doc);
+        }
+      }
+
       // Update total tasks in the state
       setState(() {
-        _totalTasks = querySnapshot.docs.length;
+        _totalTasks = uniqueTasks.length;
         _isLoading = false; // Stop loading
       });
     } catch (e) {
@@ -67,7 +88,7 @@ class _TaskAnalyticsCardState extends State<TaskAnalyticsCard> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ViewAnalyticsScreen(),
+            builder: (context) => const AnalyticsScreen(),
           ),
         );
       },

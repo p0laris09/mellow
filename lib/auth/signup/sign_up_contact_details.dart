@@ -42,7 +42,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
 
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
-  String? _errorMessage;
 
   // Regex for email validation
   final RegExp emailRegExp = RegExp(
@@ -58,47 +57,33 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
   }
 
   void _validateAndNavigate() {
-    setState(() {
-      _errorMessage = null;
-    });
-
     if (_phoneController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty ||
         _confirmPasswordController.text.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please fill in all required fields!';
-      });
+      _showErrorDialog('Please fill in all required fields!');
       return;
     }
 
     if (!isValidPhilippinePhoneNumber(_phoneController.text)) {
-      setState(() {
-        _errorMessage =
-            'Please enter a valid Philippine phone number starting with +63 9XXXXXXXXX.';
-      });
+      _showErrorDialog(
+          'Please enter a valid Philippine phone number starting with +63 9XXXXXXXXX.');
       return;
     }
 
     if (!emailRegExp.hasMatch(_emailController.text)) {
-      setState(() {
-        _errorMessage = 'Please enter a valid email address.';
-      });
+      _showErrorDialog('Please enter a valid email address.');
       return;
     }
 
     if (!passwordRegExp.hasMatch(_passwordController.text)) {
-      setState(() {
-        _errorMessage =
-            'Password must be at least 8 characters, include an uppercase letter,\na lowercase letter, a digit, and a special character.';
-      });
+      _showErrorDialog(
+          'Password must be at least 8 characters, include an uppercase letter,\na lowercase letter, a digit, and a special character.');
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        _errorMessage = 'Passwords do not match!';
-      });
+      _showErrorDialog('Passwords do not match!');
       return;
     }
 
@@ -121,6 +106,28 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
           password: _passwordController.text,
         ),
       ),
+    );
+  }
+
+  void _showErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -196,22 +203,6 @@ class _SignUpContactDetailsState extends State<SignUpContactDetails> {
                 ),
                 child: Column(
                   children: [
-                    // Error message container
-                    Container(
-                      height: 45,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      alignment: Alignment.center,
-                      child: _errorMessage != null
-                          ? Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 10,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
-                          : null,
-                    ),
                     // Phone Number
                     SizedBox(
                       width: 300,

@@ -41,7 +41,7 @@ class _SearchFriendsState extends State<SearchFriends> {
 
         String formattedName = '$firstName';
         if (middleName.isNotEmpty) {
-          formattedName += ' ${middleName[0]}.';
+          formattedName += ' ${middleName[0]}.'; // Add middle initial
         }
         if (lastName.isNotEmpty) {
           formattedName += ' $lastName';
@@ -95,17 +95,36 @@ class _SearchFriendsState extends State<SearchFriends> {
     if (currentUser == null) return;
 
     try {
-      final outgoingRequestDoc = await FirebaseFirestore.instance
+      // Check if the selected user is already a friend
+      final friendDoc = await FirebaseFirestore.instance
           .collection('friends_db')
           .doc(currentUser.uid)
           .collection('friends')
           .doc(selectedUserId)
           .get();
 
+      if (friendDoc.exists) {
+        // Navigate to ViewProfile if the selected user is a friend
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewProfile(userId: selectedUserId),
+          ),
+        );
+        return;
+      }
+
+      final outgoingRequestDoc = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(currentUser.uid)
+          .collection('requests')
+          .doc(selectedUserId)
+          .get();
+
       final incomingRequestDoc = await FirebaseFirestore.instance
           .collection('friends_db')
           .doc(selectedUserId)
-          .collection('friends')
+          .collection('requests')
           .doc(currentUser.uid)
           .get();
 

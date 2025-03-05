@@ -72,8 +72,6 @@ class TaskManager {
     'complexity': 0.3,
   };
 
-  final double weightLimit = 60.0;
-
   TaskManager({required this.currentUserId});
 
   // Apply AHP to normalize weights
@@ -83,32 +81,41 @@ class TaskManager {
         criteriaWeights.map((key, value) => MapEntry(key, value / total));
   }
 
-  // Check if total weight in a time slot exceeds the limit, considering both creator and assigned users, and spaceId
-  bool checkWeightInTimeSlot(Task newTask) {
+  // Check if the number of tasks in a time slot exceeds the user's preference
+  Future<bool> checkTaskPreferenceInTimeSlot(Task newTask) async {
     DateTime start = newTask.startTime;
     DateTime end = newTask.endTime;
 
+    // Fetch the user's task preference from Firestore
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    String taskPreferenceString = userDoc['task_preference'] ??
+        "4+ tasks"; // Default to "4+ tasks" if not set
+    int taskPreference = _parseTaskPreference(taskPreferenceString);
+
     // Iterate over every hour the new task spans
     while (start.isBefore(end)) {
-      // Calculate the total weight of tasks in the current hour (start to start+1 hour) for the creator and assigned users within the same spaceId
-      double hourWeight = tasks
+      // Calculate the number of tasks in the current hour (start to start+1 hour) for the creator and assigned users within the same spaceId
+      int taskCount = tasks
           .where((task) =>
               (task.userId == currentUserId ||
                   task.assignedTo.contains(currentUserId)) &&
               task.spaceId == newTask.spaceId && // Check for spaceId match
               task.startTime.isBefore(start.add(Duration(hours: 1))) &&
               task.endTime.isAfter(start))
-          .fold(0.0, (sum, task) => sum + task.weight);
+          .length;
 
-      // Add the weight of the new task to the weight of the current hour
-      hourWeight += newTask.weight;
+      // Add the new task to the count
+      taskCount += 1;
 
-      // Print the cumulative weight for debugging
-      print("Time: $start - Cumulative Hour Weight: $hourWeight, "
-          "New Task Weight: ${newTask.weight}, Weight Limit: $weightLimit");
+      // Print the task count for debugging
+      print("Time: $start - Task Count: $taskCount, "
+          "Task Preference: $taskPreference");
 
-      if (hourWeight > weightLimit) {
-        // If the weight limit is exceeded, return false (don't add the task)
+      if (taskCount > taskPreference) {
+        // If the task count exceeds the user's preference, return false (don't add the task)
         return false;
       }
 
@@ -116,19 +123,35 @@ class TaskManager {
       start = start.add(Duration(hours: 1));
     }
 
-    // If no hour exceeded the weight limit, allow the task to be added
+    // If no hour exceeded the task preference, allow the task to be added
     return true;
   }
 
-  // Add a task if valid and within weight limit, considering spaceId
-  void addTask(Task task) {
+  // Parse the task preference string to an integer
+  int _parseTaskPreference(String taskPreferenceString) {
+    switch (taskPreferenceString) {
+      case "1 task":
+        return 1;
+      case "2 tasks":
+        return 2;
+      case "3 tasks":
+        return 3;
+      case "4+ tasks":
+        return 4;
+      default:
+        return 4; // Default to 4 if the string is unrecognized
+    }
+  }
+
+  // Add a task if valid and within task preference, considering spaceId
+  Future<void> addTask(Task task) async {
     if (task.validateTaskTimes()) {
       task.updateWeight(
           criteriaWeights); // Ensure weight is updated before conflict check
 
-      if (!checkWeightInTimeSlot(task)) {
+      if (!await checkTaskPreferenceInTimeSlot(task)) {
         print(
-            'Conflict: Adding task "${task.taskName}" exceeds weight limit in one or more hours.');
+            'Conflict: Adding task "${task.taskName}" exceeds task preference in one or more hours.');
         return;
       }
 
@@ -211,8 +234,8 @@ class TaskManager {
     }
   }
 
-  // Conflict detector that considers weight limit before suggesting alternative times, considering spaceId
-  void detectConflictsWithSuggestions() {
+  // Conflict detector that considers task preference before suggesting alternative times, considering spaceId
+  Future<void> detectConflictsWithSuggestions() async {
     for (int i = 0; i < tasks.length; i++) {
       for (int j = i + 1; j < tasks.length; j++) {
         Task taskA = tasks[i];
@@ -228,29 +251,32 @@ class TaskManager {
           print(
               'Conflict detected between "${taskA.taskName}" and "${taskB.taskName}"');
 
-          // Check if weight limit is exceeded in the overlapping time slot for taskB
-          bool exceedsWeightLimit = !checkWeightInTimeSlot(taskB);
+          // Check if task preference is exceeded in the overlapping time slot for taskB
+          bool exceedsTaskPreference =
+              !await checkTaskPreferenceInTimeSlot(taskB);
 
-          if (exceedsWeightLimit) {
-            print('Adding "${taskB.taskName}" would exceed weight limit.');
+          if (exceedsTaskPreference) {
+            print('Adding "${taskB.taskName}" would exceed task preference.');
 
-            // Suggest alternative times for taskB only if weight limit is exceeded
-            List<DateTime> alternativeTimes = suggestAlternativeTimes(taskB, 2);
+            // Suggest alternative times for taskB only if task preference is exceeded
+            List<DateTime> alternativeTimes =
+                await suggestAlternativeTimes(taskB, 2);
             print('Suggested alternative times for "${taskB.taskName}":');
             for (var time in alternativeTimes) {
               print('- $time');
             }
           } else {
             print(
-                'Conflict detected, but weight limit is not exceeded for "${taskB.taskName}".');
+                'Conflict detected, but task preference is not exceeded for "${taskB.taskName}".');
           }
         }
       }
     }
   }
 
-  // Suggest alternative times for a conflicting task based on weight limits
-  List<DateTime> suggestAlternativeTimes(Task task, int numSuggestions) {
+  // Suggest alternative times for a conflicting task based on task preference
+  Future<List<DateTime>> suggestAlternativeTimes(
+      Task task, int numSuggestions) async {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
     Duration interval = Duration(hours: 1);
@@ -265,8 +291,8 @@ class TaskManager {
 
       if (proposedStart.isAfter(endOfDay)) break;
 
-      // Check if this time slot does not exceed the weight limit
-      bool withinWeightLimit = checkWeightInTimeSlot(Task(
+      // Check if this time slot does not exceed the task preference
+      bool withinTaskPreference = await checkTaskPreferenceInTimeSlot(Task(
         userId: task.userId,
         spaceId: task.spaceId, // Added spaceId here
         taskName: task.taskName,
@@ -279,7 +305,7 @@ class TaskManager {
         assignedTo: task.assignedTo,
       ));
 
-      if (withinWeightLimit) {
+      if (withinTaskPreference) {
         suggestions.add(proposedStart);
       }
 
@@ -326,6 +352,35 @@ class TaskManager {
     print('Not Urgent and Not Important Tasks:');
     for (var task in notUrgentNotImportant) {
       print('${task.taskName} - Weight: ${task.weight}');
+    }
+  }
+
+  // Automatically adjust task details based on existing tasks with the same name
+  void adjustTaskDetails(Task newTask) {
+    for (var task in tasks) {
+      if (task.userId == newTask.userId && task.taskName == newTask.taskName) {
+        // Adjust priority, urgency, and complexity
+        newTask.priority = task.priority;
+        newTask.urgency = task.urgency;
+        newTask.complexity = task.complexity;
+
+        // Adjust due date, start time, and end time based on the day of the week
+        DateTime now = DateTime.now();
+        int daysToAdd = (task.dueDate.weekday - now.weekday) % 7;
+        if (daysToAdd <= 0) {
+          daysToAdd += 7;
+        }
+
+        newTask.dueDate = now.add(Duration(days: daysToAdd));
+        newTask.startTime = newTask.dueDate.add(Duration(
+            hours: task.startTime.hour, minutes: task.startTime.minute));
+        newTask.endTime = newTask.dueDate.add(
+            Duration(hours: task.endTime.hour, minutes: task.endTime.minute));
+
+        print(
+            'Adjusted task details for "${newTask.taskName}" based on existing task.');
+        break;
+      }
     }
   }
 }

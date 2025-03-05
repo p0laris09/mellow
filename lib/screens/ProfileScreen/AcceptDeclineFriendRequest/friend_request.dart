@@ -24,6 +24,10 @@ class _FriendRequestState extends State<FriendRequest> {
   int taskCount = 0;
   int spaceCount = 0;
   int friendCount = 0;
+  int overdueCount = 0;
+  int pendingCount = 0;
+  int ongoingCount = 0;
+  int finishedCount = 0;
   bool isLoading = true;
   String errorMessage = '';
 
@@ -82,6 +86,14 @@ class _FriendRequestState extends State<FriendRequest> {
           .get();
       taskCount = taskSnapshot.docs.length;
 
+      // Fetch the friend count from the friends_db collection
+      QuerySnapshot friendsSnapshot = await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(widget.userId)
+          .collection('friends')
+          .get();
+      friendCount = friendsSnapshot.docs.length;
+
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -89,14 +101,14 @@ class _FriendRequestState extends State<FriendRequest> {
 
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
-        List<dynamic> friends = data['friends'] ?? [];
-        friendCount = friends.length;
         spaceCount = data['spaces'] ?? 0;
       } else {
         taskCount = 0;
         friendCount = 0;
         spaceCount = 0;
       }
+
+      await _loadTaskCounts();
 
       setState(() {
         isLoading = false;
@@ -109,44 +121,111 @@ class _FriendRequestState extends State<FriendRequest> {
     }
   }
 
+  Future<void> _loadTaskCounts() async {
+    try {
+      QuerySnapshot tasksSnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('userId', isEqualTo: widget.userId)
+          .get();
+
+      int overdueTasks = 0;
+      int pendingTasks = 0;
+      int ongoingTasks = 0;
+      int finishedTasks = 0;
+
+      for (var doc in tasksSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = data['status'] ?? '';
+        final dueDate =
+            (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+        if (dueDate.isBefore(DateTime.now()) && status != 'Finished') {
+          overdueTasks++;
+        } else if (status == 'pending') {
+          pendingTasks++;
+        } else if (status == 'ongoing') {
+          ongoingTasks++;
+        } else if (status == 'Finished') {
+          finishedTasks++;
+        }
+      }
+
+      setState(() {
+        overdueCount = overdueTasks;
+        pendingCount = pendingTasks;
+        ongoingCount = ongoingTasks;
+        finishedCount = finishedTasks;
+      });
+    } catch (e) {
+      print('Error loading task counts: $e');
+      setState(() {
+        overdueCount = 0;
+        pendingCount = 0;
+        ongoingCount = 0;
+        finishedCount = 0;
+      });
+    }
+  }
+
   Future<void> _acceptFriendRequest() async {
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('friends')
-          .doc('requests')
-          .collection(widget.userId)
-          .doc()
-          .update({'status': 'accepted'});
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('friends')
-          .doc('friends')
-          .collection(widget.userId)
-          .doc()
-          .set({'friendId': widget.userId});
-
-      await FirebaseFirestore.instance
-          .collection('users')
+      // Check if the request document exists
+      DocumentSnapshot requestDoc = await FirebaseFirestore.instance
+          .collection('friends_db')
           .doc(widget.userId)
-          .collection('friends')
-          .doc('friends')
-          .collection(currentUserId)
-          .doc()
-          .set({'friendId': currentUserId});
+          .collection('requests')
+          .doc(currentUserId)
+          .get();
 
-      await _sendNotification(
-          widget.userId, 'Friend Request Accepted', 'You are now friends.');
+      if (requestDoc.exists) {
+        // Delete the request document from the sender's requests subcollection
+        await FirebaseFirestore.instance
+            .collection('friends_db')
+            .doc(widget.userId)
+            .collection('requests')
+            .doc(currentUserId)
+            .delete();
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ViewProfile(userId: widget.userId),
-        ),
-      );
+        // Delete the request document from the receiver's requests subcollection
+        await FirebaseFirestore.instance
+            .collection('friends_db')
+            .doc(currentUserId)
+            .collection('requests')
+            .doc(widget.userId)
+            .delete();
+
+        // Add the friend to the current user's friends collection
+        await FirebaseFirestore.instance
+            .collection('friends_db')
+            .doc(currentUserId)
+            .collection('friends')
+            .doc(widget.userId)
+            .set({'friendId': widget.userId});
+
+        // Add the current user to the friend's friends collection
+        await FirebaseFirestore.instance
+            .collection('friends_db')
+            .doc(widget.userId)
+            .collection('friends')
+            .doc(currentUserId)
+            .set({'friendId': currentUserId});
+
+        // Send a notification about the accepted friend request
+        await _sendNotification(
+            widget.userId, 'Friend Request Accepted', 'You are now friends.');
+
+        // Navigate to the ViewProfile screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewProfile(userId: widget.userId),
+          ),
+        );
+      } else {
+        setState(() {
+          errorMessage = 'Friend request not found.';
+        });
+      }
     } catch (e) {
       setState(() {
         errorMessage = 'Error accepting friend request.';
@@ -157,12 +236,17 @@ class _FriendRequestState extends State<FriendRequest> {
   Future<void> _declineFriendRequest() async {
     try {
       await FirebaseFirestore.instance
-          .collection('users')
+          .collection('friends_db')
+          .doc(widget.userId)
+          .collection('requests')
           .doc(currentUserId)
-          .collection('friends')
-          .doc('requests')
-          .collection(widget.userId)
-          .doc()
+          .delete();
+
+      await FirebaseFirestore.instance
+          .collection('friends_db')
+          .doc(currentUserId)
+          .collection('requests')
+          .doc(widget.userId)
           .delete();
 
       await _sendNotification(
@@ -184,6 +268,8 @@ class _FriendRequestState extends State<FriendRequest> {
   Future<void> _sendNotification(
       String receiverId, String title, String message) async {
     await FirebaseFirestore.instance.collection('notifications').add({
+      'type': 'friend_request',
+      'senderId': currentUserId,
       'receiverId': receiverId,
       'title': title,
       'message': message,
@@ -254,12 +340,16 @@ class _FriendRequestState extends State<FriendRequest> {
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.black)),
+                  const SizedBox(height: 8),
                   Text('Section: $userSection',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('College: $college',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('Program: $program',
                       style: const TextStyle(color: Colors.black)),
+                  const SizedBox(height: 4),
                   Text('Year: $year',
                       style: const TextStyle(color: Colors.black)),
                 ],
@@ -269,23 +359,152 @@ class _FriendRequestState extends State<FriendRequest> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton(
-                  onPressed: _acceptFriendRequest,
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: const Text('Accept'),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _acceptFriendRequest,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Accept',
+                        style: TextStyle(fontSize: 16, color: Colors.white)),
+                  ),
                 ),
-                ElevatedButton(
-                  onPressed: _declineFriendRequest,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Decline'),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _declineFriendRequest,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Decline',
+                        style: TextStyle(fontSize: 16, color: Colors.white)),
+                  ),
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            _buildTaskCards(),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildTaskCards() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: 4,
+      itemBuilder: (context, index) {
+        return Card(
+          elevation: 5,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _getTaskCategoryIcon(index),
+                  size: 40,
+                  color: _getTaskCategoryColor(index),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _getTaskCategoryLabel(index),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _getTaskCategoryColor(index),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _getTaskCategoryCount(index).toString(),
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _getTaskCategoryLabel(int index) {
+    switch (index) {
+      case 0:
+        return 'Overdue';
+      case 1:
+        return 'Ongoing';
+      case 2:
+        return 'Pending';
+      case 3:
+        return 'Finished';
+      default:
+        return '';
+    }
+  }
+
+  int _getTaskCategoryCount(int index) {
+    switch (index) {
+      case 0:
+        return overdueCount;
+      case 1:
+        return ongoingCount;
+      case 2:
+        return pendingCount;
+      case 3:
+        return finishedCount;
+      default:
+        return 0;
+    }
+  }
+
+  IconData _getTaskCategoryIcon(int index) {
+    switch (index) {
+      case 0:
+        return Icons.error_outline;
+      case 1:
+        return Icons.play_circle_outline;
+      case 2:
+        return Icons.pending_actions;
+      case 3:
+        return Icons.check_circle_outline;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Color _getTaskCategoryColor(int index) {
+    switch (index) {
+      case 0:
+        return Colors.red;
+      case 1:
+        return Colors.orange;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildStatItem(String count, String label) {

@@ -74,7 +74,6 @@ class TaskCard extends StatelessWidget {
         // Ensure proper type conversion to String
         String priority = (taskData['priority'] ?? 'Not set').toString();
         String urgency = (taskData['urgency'] ?? 'Not set').toString();
-        String importance = (taskData['importance'] ?? 'Not set').toString();
         String complexity = (taskData['complexity'] ?? 'Not set').toString();
 
         // Ensure that these values are treated as strings, even if they are numbers or other types
@@ -95,7 +94,6 @@ class TaskCard extends StatelessWidget {
               description: description, // task description
               priority: priority, // priority level
               urgency: urgency, // urgency level
-              importance: importance, // importance level
               complexity: complexity, // complexity level
             ),
           ),

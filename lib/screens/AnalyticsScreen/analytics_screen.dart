@@ -20,12 +20,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
     final daysWithMostTasks =
         <Map<String, dynamic>>[]; // Tracks the number of tasks per day
-    final tasksWithMostWeight =
-        <Map<String, dynamic>>[]; // Tracks tasks with the most weight
-
-    double totalWeightSum = 0.0; // Ensure total weight sum starts at 0
-    double totalTasksSum =
-        0.0; // Not used directly in the code, but initialized
 
     int overdueTasks = 0;
     int pendingTasks = 0;
@@ -33,12 +27,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     int finishedTasks = 0;
 
     // Fetch all tasks for the user to get the overall task count
-    final allTasksQuery = await firestore
+    final userTasksQuery = await firestore
         .collection('tasks')
         .where('userId', isEqualTo: uid)
         .get();
 
-    final overallTaskCount = allTasksQuery.docs.length; // Total tasks
+    // Fetch all tasks assigned to the user
+    final assignedTasksQuery = await firestore
+        .collection('tasks')
+        .where('assignedTo', arrayContains: uid)
+        .get();
+
+    // Combine the results
+    final allTasks = userTasksQuery.docs + assignedTasksQuery.docs;
+
+    // Remove duplicates by taskId (if any)
+    Set<String> taskIds = Set();
+    List<QueryDocumentSnapshot> uniqueTasks = [];
+    for (var doc in allTasks) {
+      String taskId = doc.id;
+      if (!taskIds.contains(taskId)) {
+        taskIds.add(taskId);
+        uniqueTasks.add(doc);
+      }
+    }
+
+    final overallTaskCount = uniqueTasks.length; // Total tasks
 
     // Filter tasks based on the selected period
     final startDate = now.subtract(Duration(days: selectedPeriod));
@@ -49,98 +63,90 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       final dayEnd = dayStart.add(const Duration(days: 1));
       final label = DateFormat('MMM dd').format(day);
 
-      final query = await firestore
-          .collection('tasks')
-          .where('userId', isEqualTo: uid)
-          .where('startTime',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
-          .where('startTime', isLessThan: Timestamp.fromDate(dayEnd))
-          .get();
+      final query = uniqueTasks.where((doc) {
+        final startTime =
+            (doc.data() as Map<String, dynamic>)['startTime'] as Timestamp?;
+        return startTime != null &&
+            startTime.toDate().isAfter(dayStart) &&
+            startTime.toDate().isBefore(dayEnd);
+      }).toList();
 
-      final totalTasks = query.docs.length;
+      final totalTasks = query.length;
 
       if (totalTasks > 0) {
         daysWithMostTasks.add({'date': label, 'tasks': totalTasks});
       }
 
-      for (var doc in query.docs) {
-        final data = doc.data();
-        final priority = data['priority'] ?? 0;
-        final urgency = data['urgency'] ?? 0;
-        final importance = data['importance'] ?? 0;
-        final complexity = data['complexity'] ?? 0;
-
-        final weight = priority + urgency + importance + complexity;
-
-        totalWeightSum += weight; // Add valid weight to the total sum
+      for (var doc in query) {
+        final data = doc.data() as Map<String, dynamic>;
 
         // Determine task status and color
         String status = data['status'] ?? 'pending';
-        Color statusColor;
 
-        // Get the due date of the task
+        // Get the start and due date of the task
+        final startTime = (data['startTime'] as Timestamp?)?.toDate() ?? now;
         final dueDate = (data['dueDate'] as Timestamp?)?.toDate() ?? now;
 
         // Check if the due date has passed and the task isn't finished
-        if (dueDate.isBefore(now) && status != 'Finished') {
-          status = 'overdue'; // Dynamically set status to overdue
-        }
-
-        // Update task count based on status
         if (status == 'Finished') {
-          statusColor = Colors.green; // Finished -> Green
+          // Finished -> Green
           finishedTasks++;
-        } else if (status == 'ongoing') {
-          statusColor =
-              const Color.fromARGB(255, 33, 150, 243); // Ongoing -> Blue
-          ongoingTasks++;
-        } else if (status == 'overdue') {
-          statusColor = Colors.red; // Overdue -> Red
+        } else if (status == 'pending' && dueDate.isBefore(now)) {
+          status = 'overdue'; // Dynamically set status to overdue
+          // Overdue -> Red
           overdueTasks++;
-        } else {
-          statusColor = Colors.grey; // Pending -> Grey
+        } else if (status == 'pending' &&
+            now.isAfter(startTime) &&
+            now.isBefore(dueDate)) {
+          status = 'ongoing'; // Dynamically set status to ongoing
+          // Ongoing -> Blue
+          ongoingTasks++;
+        } else if (status == 'pending') {
+          // Pending -> Grey
           pendingTasks++;
         }
-
-        final taskName = data['taskName'] ?? 'Unnamed Task';
-
-        tasksWithMostWeight.add({
-          'name': taskName,
-          'weight': weight,
-          'statusColor': statusColor,
-          'status': status,
-        });
       }
     }
 
-    // Sort days and tasks by most tasks/weight and limit to top 5
+    // Sort days by most tasks and limit to top 5
     daysWithMostTasks.sort((a, b) => b['tasks'].compareTo(a['tasks']));
-    tasksWithMostWeight.sort((a, b) => b['weight'].compareTo(a['weight']));
 
     return {
       "overallTaskCount":
           overallTaskCount, // Ensure this reflects total task count
       "daysWithMostTasks": daysWithMostTasks.take(5).toList(),
-      "tasksWithMostWeight": tasksWithMostWeight.take(5).toList(),
       "overdueTasks": overdueTasks,
       "pendingTasks": pendingTasks,
       "ongoingTasks": ongoingTasks,
       "finishedTasks": finishedTasks,
-      "totalWeight": totalWeightSum, // Add total weight here
     };
-  }
-
-  void _onCardTap(String cardType) {
-    // Handle card tap actions
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$cardType card tapped!')),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF2275AA),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        centerTitle: true,
+        title: const Text(
+          'Task Analytics Page',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: FutureBuilder<Map<String, dynamic>>(
@@ -152,23 +158,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             if (snapshot.hasData) {
               final data = snapshot.data!;
               final daysWithMostTasks = data['daysWithMostTasks'];
-              final tasksWithMostWeight = data['tasksWithMostWeight'];
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildTaskCardSection(card: data),
+                  const SizedBox(height: 15),
                   _buildCardSection(
                     cards: [
-                      {
-                        'title': 'Total Tasks',
-                        'color': Colors.purple,
-                        'value': data['overallTaskCount']
-                      },
-                      {
-                        'title': 'Total Weight',
-                        'color': Colors.orange,
-                        'value': data['totalWeight'].toStringAsFixed(2)
-                      },
                       {
                         'title': 'Overdue Tasks',
                         'color': Colors.red,
@@ -200,22 +197,53 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       valueField: 'tasks',
                     ),
                   ],
-                  if (tasksWithMostWeight.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _buildListSection(
-                      title: 'Tasks with Most Weight',
-                      items: tasksWithMostWeight,
-                      keyField: 'name',
-                      valueField: 'weight',
-                      showStatusColor: true,
-                    ),
-                  ],
                 ],
               );
             }
             return const Text('Error loading data.');
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildTaskCardSection({required Map<String, dynamic> card}) {
+    return Container(
+      width: double.infinity, // Make the container fill the entire width
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2275AA),
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6.0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Text(
+            'Tasks',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            card['overallTaskCount'].toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -233,45 +261,42 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       itemCount: cards.length,
       itemBuilder: (context, index) {
         final card = cards[index];
-        return GestureDetector(
-          onTap: () => _onCardTap(card['title']),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: card['color'] as Color,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: (card['color'] as Color).withOpacity(0.3),
-                  spreadRadius: 2,
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: card['color'] as Color,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: (card['color'] as Color).withOpacity(0.3),
+                spreadRadius: 2,
+                blurRadius: 5,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                card['title'] as String,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white70,
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  card['title'] as String,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white70,
-                  ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                card['value'].toString(),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  card['value'].toString(),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -293,7 +318,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Colors.black, // Set title text color to black
           ),
         ),
         const SizedBox(height: 8),
@@ -302,11 +327,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             color: Colors.white,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
-              title: Text(item[keyField].toString()),
+              title: Text(
+                item[keyField].toString(),
+                style: const TextStyle(
+                    color: Colors.black), // Set item text color to black
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(item[valueField].toString()),
+                  Text(
+                    item[valueField].toString(),
+                    style: const TextStyle(
+                        color:
+                            Colors.black), // Set item value text color to black
+                  ),
                   if (showStatusColor)
                     Container(
                       margin: const EdgeInsets.only(left: 8),
@@ -321,7 +355,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }

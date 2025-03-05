@@ -15,7 +15,6 @@ class TaskEditScreen extends StatefulWidget {
   final String description;
   final double priority;
   final double urgency;
-  final double importance;
   final double complexity;
 
   const TaskEditScreen({
@@ -29,7 +28,6 @@ class TaskEditScreen extends StatefulWidget {
     required this.description,
     required this.priority,
     required this.urgency,
-    required this.importance,
     required this.complexity,
   });
 
@@ -62,7 +60,6 @@ class TaskManager {
         description: data['description'] ?? '',
         priority: data['priority']?.toDouble() ?? 1.0,
         urgency: data['urgency']?.toDouble() ?? 1.0,
-        importance: data['importance']?.toDouble() ?? 1.0,
         complexity: data['complexity']?.toDouble() ?? 1.0,
         taskId: doc.id,
       );
@@ -170,7 +167,6 @@ class TaskManager {
         'description': task.description,
         'priority': task.priority,
         'urgency': task.urgency,
-        'importance': task.importance,
         'complexity': task.complexity,
       });
       task.taskId = docRef.id;
@@ -196,7 +192,6 @@ class TaskManager {
         'description': task.description,
         'priority': task.priority,
         'urgency': task.urgency,
-        'importance': task.importance,
         'complexity': task.complexity,
       });
     } catch (e) {
@@ -215,7 +210,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   int _descriptionCharCount = 0;
   double _priority = 1;
   double _urgency = 1;
-  double _importance = 1;
   double _complexity = 1;
 
   late TaskManager taskManager;
@@ -256,7 +250,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           description: data['description'] ?? '',
           priority: data['priority']?.toDouble() ?? 1,
           urgency: data['urgency']?.toDouble() ?? 1,
-          importance: data['importance']?.toDouble() ?? 1,
           complexity: data['complexity']?.toDouble() ?? 1,
         );
 
@@ -271,7 +264,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           _descriptionController.text = taskBeingEdited.description;
           _priority = taskBeingEdited.priority;
           _urgency = taskBeingEdited.urgency;
-          _importance = taskBeingEdited.importance;
           _complexity = taskBeingEdited.complexity;
         });
       }
@@ -507,12 +499,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                       });
                     }),
                     const SizedBox(height: 15),
-                    _buildSlider("Importance", _importance, (value) {
-                      setState(() {
-                        _importance = value;
-                      });
-                    }),
-                    const SizedBox(height: 15),
                     _buildSlider("Complexity", _complexity, (value) {
                       setState(() {
                         _complexity = value;
@@ -536,7 +522,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             description: _descriptionController.text,
                             priority: _priority,
                             urgency: _urgency,
-                            importance: _importance,
                             complexity: _complexity,
                           );
 
@@ -553,7 +538,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             {
                               'priority': _priority,
                               'urgency': _urgency,
-                              'importance': _importance,
                               'complexity': _complexity,
                             },
                           );

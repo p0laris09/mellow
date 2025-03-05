@@ -3,8 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/account_information_page.dart';
-import 'package:mellow/screens/SettingsScreen/PrivacyPolicy/privacy_policy.dart';
-import 'package:mellow/screens/SettingsScreen/TermsOfService/terms_of_service.dart';
 import 'package:mellow/screens/SettingsScreen/settings_page.dart';
 
 class SettingsDrawer extends StatefulWidget {

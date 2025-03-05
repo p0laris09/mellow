@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 
 class TaskHistory extends StatefulWidget {
-  const TaskHistory({Key? key}) : super(key: key);
+  const TaskHistory({super.key});
 
   @override
   State<TaskHistory> createState() => _TaskHistoryState();
@@ -19,7 +19,12 @@ class _TaskHistoryState extends State<TaskHistory> {
   @override
   void initState() {
     super.initState();
-    _getTaskStream();
+    _getTaskStream().listen((tasks) {
+      setState(() {
+        allTasks = tasks;
+        filteredTasks = tasks;
+      });
+    });
   }
 
   Stream<List<Map<String, dynamic>>> _getTaskStream() {
@@ -43,33 +48,34 @@ class _TaskHistoryState extends State<TaskHistory> {
         return {
           'taskId': doc.id,
           'taskName': data['taskName'] ?? 'Unnamed Task',
-          'dueDate': (data['dueDate'] as Timestamp).toDate(),
+          'dueDate': (data['dueDate'] as Timestamp?)?.toDate(),
           'startTime': (data['startTime'] as Timestamp?)?.toDate(),
           'endTime': (data['endTime'] as Timestamp?)?.toDate(),
           'description': data['description'] ?? '',
           'taskStatus': status,
-          'createdAt': (data['createdAt'] as Timestamp).toDate(),
+          'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
         };
       }).toList();
     });
   }
 
   String calculateTaskStatus(Map<String, dynamic> task, DateTime now) {
-    DateTime startTime = (task['startTime'] as Timestamp).toDate();
-    DateTime endTime = (task['endTime'] as Timestamp).toDate();
+    DateTime? startTime = (task['startTime'] as Timestamp?)?.toDate();
+    DateTime? endTime = (task['endTime'] as Timestamp?)?.toDate();
     String status = task['status'] ?? 'Pending';
 
     if (status == 'Finished') {
       return 'Finished';
-    } else if (now.isAfter(startTime) && now.isBefore(endTime)) {
-      return 'Overdue';
-    } else if (now.isAtSameMomentAs(startTime)) {
-      return 'Ongoing';
-    } else if (now.isBefore(startTime)) {
-      return 'Pending';
-    } else {
-      return 'Pending'; // Fallback
+    } else if (startTime != null && endTime != null) {
+      if (now.isAfter(startTime) && now.isBefore(endTime)) {
+        return 'Overdue';
+      } else if (now.isAtSameMomentAs(startTime)) {
+        return 'Ongoing';
+      } else if (now.isBefore(startTime)) {
+        return 'Pending';
+      }
     }
+    return 'Pending'; // Fallback
   }
 
   void _applyFilter(String status) {
@@ -94,8 +100,9 @@ class _TaskHistoryState extends State<TaskHistory> {
     setState(() {
       isAscending = !isAscending;
       filteredTasks.sort((a, b) {
-        final createdAtA = a['createdAt'] as DateTime;
-        final createdAtB = b['createdAt'] as DateTime;
+        final createdAtA = a['createdAt'] as DateTime?;
+        final createdAtB = b['createdAt'] as DateTime?;
+        if (createdAtA == null || createdAtB == null) return 0;
         return isAscending
             ? createdAtA.compareTo(createdAtB)
             : createdAtB.compareTo(createdAtA);
@@ -223,7 +230,8 @@ class _TaskHistoryState extends State<TaskHistory> {
                 }
 
                 if (snapshot.hasError) {
-                  return const Center(child: Text('Error fetching tasks'));
+                  return Center(
+                      child: Text('Error fetching tasks: ${snapshot.error}'));
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {

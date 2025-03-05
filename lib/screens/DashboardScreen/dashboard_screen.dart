@@ -1,19 +1,18 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
-import 'package:mellow/screens/AnalyticsScreen/analytics_screen.dart';
 import 'package:mellow/screens/ProfileScreen/profile_page.dart';
 import 'package:mellow/screens/SpaceScreen/space_screen.dart';
 import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:mellow/widgets/appbar/myappbar.dart';
 import 'package:mellow/widgets/bottomnav/mybottomnavbar.dart';
 import 'package:mellow/widgets/cards/AnalyticsCards/task_analytics_card.dart';
-import 'package:mellow/widgets/cards/AnalyticsCards/weight_analytics_card.dart';
 import 'package:mellow/widgets/cards/SpaceCards/recently_space_card.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mellow/widgets/cards/TaskCards/task_card.dart';
 import 'package:provider/provider.dart'; // For Firebase Authentication
+import 'package:connectivity_plus/connectivity_plus.dart'; // For checking network connectivity
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,7 +28,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const DashboardScreenContent(),
     TaskManagementScreen(),
     const SpaceScreen(),
-    const AnalyticsScreen(),
     const ProfilePage(),
   ];
 
@@ -70,9 +68,18 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   @override
   void initState() {
     super.initState();
-    _fetchTasks();
-    _loadUserProfile();
-    _fetchRecentSpaces();
+    _checkConnectivityAndLoadData();
+  }
+
+  Future<void> _checkConnectivityAndLoadData() async {
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    if (connectivityResult == ConnectivityResult.none) {
+      Navigator.of(context).pushReplacementNamed('/no_network');
+    } else {
+      _fetchTasks();
+      _loadUserProfile();
+      _fetchRecentSpaces();
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -85,21 +92,25 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         // Fetch the profile image using the provider, similar to the MyAppBar approach
         await profileImageProvider.fetchProfileImage(user);
 
-        // Set the default values if the profile image URL is null or empty
-        setState(() {
-          profileImageUrl =
-              profileImageProvider.profileImageUrl?.isNotEmpty ?? false
-                  ? profileImageProvider.profileImageUrl!
-                  : 'assets/img/default_profile.png';
-          userName = user.displayName ?? 'User';
-        });
+        // Check if the widget is still mounted before calling setState
+        if (mounted) {
+          setState(() {
+            profileImageUrl =
+                profileImageProvider.profileImageUrl?.isNotEmpty ?? false
+                    ? profileImageProvider.profileImageUrl!
+                    : 'assets/img/default_profile.png';
+            userName = user.displayName ?? 'User';
+          });
+        }
       } catch (e) {
         // Fallback to default values if an error occurs
         print('Error loading profile: $e');
-        setState(() {
-          profileImageUrl = 'assets/img/default_profile.png';
-          userName = 'User';
-        });
+        if (mounted) {
+          setState(() {
+            profileImageUrl = 'assets/img/default_profile.png';
+            userName = 'User';
+          });
+        }
       }
     }
   }
@@ -172,6 +183,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         }
       }
 
+      // Check if the widget is still mounted before calling setState
       if (mounted) {
         setState(() {
           _tasks = uniqueTasks;
@@ -242,6 +254,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         return doc; // Returning the original document, you can modify this if needed
       }).toList();
 
+      // Check if the widget is still mounted before calling setState
       if (mounted) {
         setState(() {
           _recentSpaces = processedSpaces; // Use the processed spaces list
@@ -252,69 +265,81 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     }
   }
 
+  Future<void> _refreshPage() async {
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    if (connectivityResult == ConnectivityResult.none) {
+      Navigator.of(context).pushReplacementNamed('/no_network');
+    } else {
+      await _checkConnectivityAndLoadData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _getFirstName(),
-      builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        } else {
-          final String firstName = snapshot.data ?? 'User';
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.white,
-                      backgroundImage: profileImageUrl.isNotEmpty
-                          ? NetworkImage(profileImageUrl)
-                          : null,
-                      child: profileImageUrl.isEmpty
-                          ? const Icon(Icons.person, size: 40)
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Hello $firstName!",
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+    return RefreshIndicator(
+      onRefresh: _refreshPage,
+      child: FutureBuilder<String?>(
+        future: _getFirstName(),
+        builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else {
+            final String firstName = snapshot.data ?? 'User';
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.white,
+                        backgroundImage: profileImageUrl.isNotEmpty
+                            ? NetworkImage(profileImageUrl)
+                            : null,
+                        child: profileImageUrl.isEmpty
+                            ? const Icon(Icons.person, size: 40)
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Hello $firstName!",
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
                           ),
-                        ),
-                        const Text(
-                          "Have a nice day.",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w300,
-                            color: Colors.black87,
+                          const Text(
+                            "Have a nice day.",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w300,
+                              color: Colors.black87,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildAnalyticsSection(),
-                const SizedBox(height: 32),
-                _buildSpaceSection(),
-                const SizedBox(height: 32),
-                _buildTaskSection(),
-              ],
-            ),
-          );
-        }
-      },
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildAnalyticsSection(),
+                  const SizedBox(height: 32),
+                  _buildSpaceSection(),
+                  const SizedBox(height: 32),
+                  _buildTaskSection(),
+                ],
+              ),
+            );
+          }
+        },
+      ),
     );
   }
 
@@ -335,80 +360,38 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          StreamBuilder<DocumentSnapshot>(
-            // Stream to get totalWeight from Firestore
+          StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('users') // Assuming you store user data here
-                .doc(FirebaseAuth.instance.currentUser!.uid)
+                .collection('tasks')
+                .where('userId',
+                    isEqualTo: FirebaseAuth.instance.currentUser!.uid)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return const Text(
-                  "Error fetching analytics data.",
+                  "Error fetching task data.",
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 );
               }
 
-              if (!snapshot.hasData || !snapshot.data!.exists) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Text(
-                  "No analytics to show.",
+                  "No tasks available for analytics.",
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 );
               }
 
-              var userData = snapshot.data!.data() as Map<String, dynamic>;
-              double totalWeight = userData['totalWeight'] ?? 0.0;
+              var tasks = snapshot.data!.docs;
 
-              return StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('tasks')
-                    .where('userId',
-                        isEqualTo: FirebaseAuth.instance.currentUser!.uid)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Text(
-                      "Error fetching task data.",
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Text(
-                      "No tasks available for analytics.",
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    );
-                  }
-
-                  var tasks = snapshot.data!.docs;
-
-                  // Recalculate the total weight if it's not found in Firestore
-                  double calculatedWeight = tasks.fold<double>(
-                    0.0,
-                    (sum, task) => sum + (task['weight'] ?? 0.0),
-                  );
-
-                  // If Firestore doesn't have the weight, we use the calculated weight
-                  totalWeight =
-                      totalWeight != 0.0 ? totalWeight : calculatedWeight;
-
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: TaskAnalyticsCard(
-                          totalTasks: tasks.length,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: WeightAnalyticsCard(
-                          totalWeight: totalWeight,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: TaskAnalyticsCard(
+                      totalTasks: tasks.length,
+                    ),
+                  ),
+                ],
               );
             },
           ),

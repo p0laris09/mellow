@@ -33,10 +33,6 @@ class MyBottomNavBar extends StatelessWidget {
           label: 'Space',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart),
-          label: 'Analytics',
-        ),
-        BottomNavigationBarItem(
           icon: Icon(Icons.person),
           label: 'Profile',
         ),
