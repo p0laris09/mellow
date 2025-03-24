@@ -285,7 +285,7 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                                       Navigator.pushNamed(context, '/terms');
                                     },
                                 ),
-                                const TextSpan(text: " and "),
+                                const TextSpan(text: ", "),
                                 TextSpan(
                                   text: "Privacy Policy",
                                   style: const TextStyle(
@@ -295,6 +295,19 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                                   recognizer: TapGestureRecognizer()
                                     ..onTap = () {
                                       Navigator.pushNamed(context, '/privacy');
+                                    },
+                                ),
+                                const TextSpan(text: ", and "),
+                                TextSpan(
+                                  text: "Data Privacy",
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      Navigator.pushNamed(
+                                          context, '/dataPrivacy');
                                     },
                                 ),
                                 const TextSpan(text: "."),

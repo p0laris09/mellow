@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -33,6 +34,10 @@ class _SettingsState extends State<SettingsPage> {
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
     tz.initializeTimeZones();
+
+    if (await Permission.scheduleExactAlarm.isDenied) {
+      await Permission.scheduleExactAlarm.request();
+    }
   }
 
   // Check notification permission status
@@ -276,6 +281,16 @@ class _SettingsState extends State<SettingsPage> {
               trailing: const Icon(Icons.arrow_forward_ios),
               onTap: () {
                 Navigator.pushNamed(context, '/privacy');
+              },
+            ),
+            ListTile(
+              title: const Text(
+                'Data Privacy',
+                style: TextStyle(fontSize: 16),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: () {
+                Navigator.pushNamed(context, '/dataPrivacy');
               },
             ),
           ],

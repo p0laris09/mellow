@@ -233,24 +233,6 @@ class _SpaceScreenState extends State<SpaceScreen> {
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: ElevatedButton(
                     onPressed: () {
-                      // Handle Collaborate with Peers action
-                    },
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor:
-                          const Color(0xFF2275AA), // Set background color
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text("Collab with peers",
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: ElevatedButton(
-                    onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -266,7 +248,7 @@ class _SpaceScreenState extends State<SpaceScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text("Create New Space",
+                    child: const Text("Create Collaboration Space",
                         style: TextStyle(color: Colors.white)),
                   ),
                 ),

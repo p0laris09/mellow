@@ -12,6 +12,8 @@ class TaskCard extends StatelessWidget {
   final DateTime startDateTime;
   final DateTime dueDateTime;
   final String taskStatus; // Accept task status from Firestore
+  final DateTime? completionTime; // Add completion time
+  final VoidCallback onTaskFinished; // Callback to notify parent
 
   const TaskCard({
     super.key,
@@ -22,17 +24,22 @@ class TaskCard extends StatelessWidget {
     required this.startDateTime,
     required this.dueDateTime,
     required this.taskStatus, // Initialize task status
+    this.completionTime, // Initialize completion time
+    required this.onTaskFinished, // Initialize callback
   });
 
   Future<void> _markTaskAsFinished() async {
     String uid = FirebaseAuth.instance.currentUser!.uid;
+    DateTime completionTime = DateTime.now();
 
     try {
-      await FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(taskId)
-          .update({'status': 'Finished', 'userId': uid});
+      await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+        'status': 'Finished',
+        'userId': uid,
+        'completionTime': completionTime,
+      });
       print('Task marked as finished.');
+      onTaskFinished(); // Notify parent widget
     } catch (e) {
       print('Error updating task status: $e');
     }
@@ -162,6 +169,14 @@ class TaskCard extends StatelessWidget {
                       color: statusColor,
                     ),
                   ),
+                  if (taskStatus == 'Finished' && completionTime != null)
+                    Text(
+                      'Completed: ${DateFormat('yyyy-MM-dd HH:mm').format(completionTime!)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
                 ],
               ),
             ),

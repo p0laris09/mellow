@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mellow/auth/signup/sign_up_contact_details.dart';
 
 class SignUpCollegeDetails extends StatefulWidget {
@@ -9,21 +10,23 @@ class SignUpCollegeDetails extends StatefulWidget {
   final String birthday;
   final String gender;
 
-  const SignUpCollegeDetails(
-      {super.key,
-      required this.firstName,
-      required this.middleName,
-      required this.lastName,
-      required this.birthday,
-      required this.gender});
+  const SignUpCollegeDetails({
+    super.key,
+    required this.firstName,
+    required this.middleName,
+    required this.lastName,
+    required this.birthday,
+    required this.gender,
+  });
 
   @override
   _SignUpCollegeDetailsState createState() => _SignUpCollegeDetailsState();
 }
 
 class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
-  final TextEditingController _universityController =
-      TextEditingController(text: "University of Makati");
+  String? _selectedUniversity;
+  List<String> _universities = [];
+
   final TextEditingController _sectionController = TextEditingController();
 
   String? _selectedYear;
@@ -36,107 +39,140 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
   ];
 
   String? _selectedCollege;
-  final List<String> _colleges = [
-    'College of Liberal Arts and Science',
-    'College of Human Kinetics',
-    'College of Business and Financial Sciences',
-    'College of Computing and Information Sciences',
-    'College of Innovative Teacher Education',
-    'College of Governance and Public Policy',
-    'College of Construction Science and Engineering',
-    'College of Technology Management',
-    'College of Tourism and Hospitality Management',
-    'College of Continuing, Advance and Professional Studies',
-  ];
+  List<String> _colleges = [];
 
   String? _selectedProgram;
-  final List<String> _clasPrograms = [];
-  final List<String> _chkPrograms = [
-    'Bachelor of Science in Exercise and Sports Science Major in Sports and Fitness Management',
-  ];
-  final List<String> _cbfsPrograms = [
-    'Bachelor of Science in Office Administration',
-    'Bachelor of Science in Entrepreneurial Management',
-    'Bachelor of Science in Financial Management',
-    'Bachelor of Science in Business Administration major in Marketing Management',
-    'Bachelor of Science in Business Administration major in Human Resource Development Management',
-    'Bachelor of Science in Business Administration major in Supply Management',
-    'Bachelor of Science in Business Administration major in Building and Property Management',
-    'Associate in Sales Management',
-    'Associate in Office Management Technology',
-    'Associate in Entrepreneurship',
-    'Associate in Supply Management',
-    'Associate in Building and Property Management',
-  ];
-  final List<String> _ccisPrograms = [
-    'Bachelor of Science in Information Technology (Information and Network Security Elective Track)',
-    'Bachelor of Science in Computer Science (Computational and Data Sciences Elective Track)',
-    'Bachelor of Science in Computer Science (Application Development Elective Track)',
-    'Diploma in Application Development',
-    'Diploma in Computer Network Administration',
-  ];
-  final List<String> _citePrograms = [
-    'Bachelor of Secondary Education Major in English',
-    'Bachelor of Secondary Education Major in Mathematics',
-    'Bachelor of Secondary Education Major in Social Studies',
-    'Bachelor of Elementary Education',
-  ];
-  final List<String> _cgppPrograms = [
-    'Bachelor of Arts in Political Science major in Paralegal Studies',
-    'Bachelor of Arts in Political Science major in Policy Management',
-    'Bachelor of Arts in Political Science major in Local Government Administration',
-  ];
-  final List<String> _ccsePrograms = [
-    'B.S. in Civil Engineering In Construction Engineering and Management',
-  ];
-  final List<String> _ctmPrograms = [
-    'Bachelor of Science in Building Technology Management',
-    'Bachelor of Science in Electrical Technology',
-    'Bachelor of Science in Electronics and Telecommunication Technology',
-    'Bachelor in Automotive Technology',
-    'Diploma in Electrical Technology',
-    'Diploma in Industrial Facilities Technology',
-    'Diploma in Industrial Facilities Technology Major in Service Mechanics',
-    'Associate in Electronics Technology',
-    'Certificate in Building Technology Management',
-  ];
-  final List<String> _cthmPrograms = [
-    'Bachelor of Science in Hospitality Management',
-    'Bachelor of Science in Tourism Management',
-    'Associate in Hospitality Management',
-  ];
-  final List<String> _ccapsPrograms = [];
+  List<String> _programs = [];
 
-  List<String> _getPrograms() {
-    switch (_selectedCollege) {
-      case 'College of Liberal Arts and Science':
-        return _clasPrograms;
-      case 'College of Human Kinetics':
-        return _chkPrograms;
-      case 'College of Business and Financial Sciences':
-        return _cbfsPrograms;
-      case 'College of Computing and Information Sciences':
-        return _ccisPrograms;
-      case 'College of Innovative Teacher Education':
-        return _citePrograms;
-      case 'College of Governance and Public Policy':
-        return _cgppPrograms;
-      case 'College of Construction Science and Engineering':
-        return _ccsePrograms;
-      case 'College of Technology Management':
-        return _ctmPrograms;
-      case 'College of Tourism and Hospitality Management':
-        return _cthmPrograms;
-      case 'College of Continuing, Advance and Professional Studies':
-        return _ccapsPrograms;
+  @override
+  void initState() {
+    super.initState();
+    _fetchUniversities();
+  }
+
+  Future<void> _fetchUniversities() async {
+    try {
+      final universitiesSnapshot =
+          await FirebaseFirestore.instance.collection('universities').get();
+
+      final List<String> universities = universitiesSnapshot.docs
+          .map((doc) => doc.data()['university'] as String)
+          .toList();
+
+      setState(() {
+        _universities = universities;
+      });
+    } catch (e) {
+      print("Error fetching universities: $e");
+    }
+  }
+
+  Future<void> _fetchColleges(String university) async {
+    try {
+      final universityDoc = await FirebaseFirestore.instance
+          .collection('universities')
+          .where('university', isEqualTo: university)
+          .get();
+
+      if (universityDoc.docs.isNotEmpty) {
+        final universityData = universityDoc.docs.first.data();
+        final List<dynamic> colleges = universityData['colleges'] ?? [];
+        setState(() {
+          _colleges = colleges.cast<String>();
+        });
+      } else {
+        print("University document does not exist");
+      }
+    } catch (e) {
+      print("Error fetching colleges: $e");
+    }
+  }
+
+  Future<void> _fetchPrograms(String college) async {
+    try {
+      final universityDoc = await FirebaseFirestore.instance
+          .collection('universities')
+          .where('university', isEqualTo: _selectedUniversity)
+          .get();
+
+      if (universityDoc.docs.isNotEmpty) {
+        final universityData = universityDoc.docs.first.data();
+        final dynamic programsData = universityData[_getProgramField(college)];
+
+        if (programsData != null) {
+          if (programsData is List) {
+            setState(() {
+              _programs = programsData.cast<String>();
+            });
+          } else if (programsData is String) {
+            setState(() {
+              _programs = [programsData];
+            });
+          }
+        } else {
+          setState(() {
+            _programs = [];
+          });
+        }
+      } else {
+        print("University document does not exist");
+      }
+    } catch (e) {
+      print("Error fetching programs: $e");
+    }
+  }
+
+  String _getProgramField(String college) {
+    switch (college) {
+      case 'College of Business and Financial Sciences (CBFS)':
+        return 'cbfs';
+      case 'College of Innovative Teacher Education (CITE)':
+        return 'cite';
+      case 'College of Computing and Information Sciences (CCIS)':
+        return 'ccis';
+      case 'College of Construction Sciences and Engineering (CCSE)':
+        return 'ccse';
+      case 'College of Engineering Technology (CET)':
+        return 'cet';
+      case 'College of Governance and Public Policy (CGPP)':
+        return 'cgpp';
+      case 'College of Tourism and Hospitality Management (CTHM)':
+        return 'cthm';
+      case 'College of Human Kinetics (CHK)':
+        return 'chk';
+      case 'College of Liberal Arts and Sciences (CLAS)':
+        return 'clas';
+      case 'College of Continuing, Advanced and Professional Studies (CCAPS)':
+        return 'ccaps';
+      case 'Higher School ng UMak (CITE-HSU)':
+        return 'cite';
+      case 'School of Law (SOL)':
+        return 'sol';
+      case 'Institute of Arts and Design (IAD)':
+        return 'iad';
+      case 'Institute of Accountancy (IOA)':
+        return 'ioa';
+      case 'Institute of Pharmacy (IOP)':
+        return 'iop';
+      case 'Institute of Nursing (ION)':
+        return 'ion';
+      case 'Institute of Imaging Health Sciences (IIHS)':
+        return 'iihs';
+      case 'Institute of Psychology (IOPsy)':
+        return 'iopsy';
+      case 'Institute for Social Development and Nation Building (ISDNB)':
+        return 'isdnb';
+      case 'Institute of Technical Education and Skills Training (ITEST)':
+        return 'itest';
       default:
-        return [];
+        return '';
     }
   }
 
   void _validateAndNavigate() {
     // Check if fields are empty
-    if (_selectedCollege == null ||
+    if (_selectedUniversity == null ||
+        _selectedCollege == null ||
         _selectedProgram == null ||
         _selectedYear == null ||
         _sectionController.text.isEmpty) {
@@ -154,7 +190,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
           lastName: widget.lastName,
           birthday: widget.birthday,
           gender: widget.gender,
-          university: _universityController.text,
+          university: _selectedUniversity!,
           college: _selectedCollege!,
           program: _selectedProgram!,
           year: _selectedYear!,
@@ -239,12 +275,11 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                 ),
                 child: Column(
                   children: [
-                    // University
+                    // University Dropdown
                     SizedBox(
                       width: 300,
-                      child: TextField(
-                        controller: _universityController,
-                        readOnly: true,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedUniversity,
                         decoration: const InputDecoration(
                           labelText: "University",
                           labelStyle: TextStyle(
@@ -253,6 +288,45 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                           ),
                           border: UnderlineInputBorder(),
                         ),
+                        items: _universities.map((String university) {
+                          return DropdownMenuItem<String>(
+                            value: university,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                university,
+                                overflow: TextOverflow.visible,
+                                maxLines: null,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedUniversity = newValue;
+                            _selectedCollege =
+                                null; // Reset college when university changes
+                            _selectedProgram =
+                                null; // Reset program when university changes
+                            _colleges = []; // Clear colleges list
+                            _programs = []; // Clear programs list
+                          });
+                          if (newValue != null) {
+                            _fetchColleges(newValue);
+                          }
+                        },
+                        selectedItemBuilder: (BuildContext context) {
+                          return _universities.map((String university) {
+                            return ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                university,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList();
+                        },
+                        menuMaxHeight: 300,
                       ),
                     ),
                     const SizedBox(height: 9),
@@ -289,7 +363,11 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                             _selectedCollege = newValue;
                             _selectedProgram =
                                 null; // Reset program when college changes
+                            _programs = []; // Clear programs list
                           });
+                          if (newValue != null) {
+                            _fetchPrograms(newValue);
+                          }
                         },
                         // Custom display for the selected item (using ellipsis)
                         selectedItemBuilder: (BuildContext context) {
@@ -322,8 +400,8 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                           ),
                           border: UnderlineInputBorder(),
                         ),
-                        items: _getPrograms().isNotEmpty
-                            ? _getPrograms().map((String program) {
+                        items: _programs.isNotEmpty
+                            ? _programs.map((String program) {
                                 return DropdownMenuItem<String>(
                                   value: program,
                                   child: ConstrainedBox(
@@ -344,7 +422,7 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                                   child: Text("No programs available"),
                                 ),
                               ],
-                        onChanged: _getPrograms().isNotEmpty
+                        onChanged: _programs.isNotEmpty
                             ? (String? newValue) {
                                 setState(() {
                                   _selectedProgram = newValue;
@@ -352,8 +430,8 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
                               }
                             : null, // Disable dropdown if no programs are available
                         selectedItemBuilder: (BuildContext context) {
-                          return _getPrograms().isNotEmpty
-                              ? _getPrograms().map((String program) {
+                          return _programs.isNotEmpty
+                              ? _programs.map((String program) {
                                   return ConstrainedBox(
                                     constraints:
                                         const BoxConstraints(maxWidth: 250),

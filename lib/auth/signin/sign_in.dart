@@ -83,7 +83,8 @@ class _SignInPageState extends State<SignInPage> {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF2275AA),
-          title: const Text("Error", style: TextStyle(color: Colors.white)),
+          title: const Text("Incorret Credentials",
+              style: TextStyle(color: Colors.white)),
           content:
               Text(errorMessage, style: const TextStyle(color: Colors.white70)),
           actions: [

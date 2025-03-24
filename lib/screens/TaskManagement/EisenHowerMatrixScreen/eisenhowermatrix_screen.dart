@@ -112,17 +112,20 @@ class _EisenhowerMatrixViewState extends State<EisenhowerMatrixView> {
                               task['status'] != 'Finished') ||
                           ((task['taskType'] == 'duo' ||
                                   task['taskType'] == 'space') &&
-                              task['assignedTo'].contains(uid));
+                              (task['assignedTo']?.contains(uid) ?? false) &&
+                              task['status'] != 'Finished');
                     } else if (widget.selectedFilter == 'Personal') {
                       return task['userId'] == uid &&
                           task['taskType'] == 'personal' &&
                           task['status'] != 'Finished';
                     } else if (widget.selectedFilter == 'Shared') {
                       return task['taskType'] == 'duo' &&
-                          task['assignedTo'].contains(uid);
+                          (task['assignedTo']?.contains(uid) ?? false) &&
+                          task['status'] != 'Finished';
                     } else if (widget.selectedFilter == 'Collaboration Space') {
                       return task['taskType'] == 'space' &&
-                          task['assignedTo'].contains(uid);
+                          (task['assignedTo']?.contains(uid) ?? false) &&
+                          task['status'] != 'Finished';
                     }
                     return false;
                   }).where((task) {
@@ -137,14 +140,24 @@ class _EisenhowerMatrixViewState extends State<EisenhowerMatrixView> {
                         : 0.0;
 
                     switch (title) {
-                      case "Urgent & Important":
-                        return urgency > 0.5 && priority > 0.5;
-                      case "Not Urgent & Important":
-                        return urgency <= 0.5 && priority > 0.5;
-                      case "Urgent & Not Important":
-                        return urgency > 0.5 && priority <= 0.5;
-                      case "Not Urgent & Not Important":
-                        return urgency <= 0.5 && priority <= 0.5;
+                      case "Urgent & Important": // Quadrant I
+                        return (urgency >= 3 &&
+                            priority >=
+                                3); // Include 3 as part of high urgency and importance
+
+                      case "Not Urgent & Important": // Quadrant II
+                        return (urgency <= 2) &&
+                            (priority >=
+                                3); // Low urgency, but important (priority 3 or 4)
+
+                      case "Urgent & Not Important": // Quadrant III
+                        return (urgency >= 3) &&
+                            (priority <= 2); // High urgency, low priority
+
+                      case "Not Urgent & Not Important": // Quadrant IV
+                        return (urgency <= 2) &&
+                            (priority <= 2); // Low urgency and low priority
+
                       default:
                         return false;
                     }

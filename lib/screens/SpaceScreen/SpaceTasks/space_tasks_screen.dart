@@ -464,6 +464,7 @@ class _SpaceTasksScreenState extends State<SpaceTasksScreen> {
               startDateTime: (task['startTime'] as Timestamp).toDate(),
               dueDateTime: (task['dueDate'] as Timestamp).toDate(),
               taskStatus: task['status'] ?? 'Pending',
+              onTaskFinished: () {},
             );
           },
         );

@@ -1,10 +1,10 @@
 import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart'; // Import this package
 import 'package:mellow/NetworkPage/no_network_page.dart';
 import 'package:mellow/auth/auth_page.dart';
 import 'package:mellow/auth/forgotpassword/fp_emailsent.dart';
@@ -16,6 +16,7 @@ import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
 import 'package:mellow/screens/MessageScreen/message_screen.dart';
 import 'package:mellow/screens/NotificationScreen/notification_screen.dart';
+import 'package:mellow/screens/Policies/DataPrivacyAct/data_privacy_screen.dart';
 import 'package:mellow/screens/ProfileScreen/SearchFriendsScreen/search_friends.dart';
 import 'package:mellow/screens/ProfileScreen/profile_page.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/UpdateEmail/email_update.dart';
@@ -109,6 +110,12 @@ class MellowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Restrict the app to portrait mode only
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
     return MaterialApp(
       navigatorKey: navigatorKey, // Set the navigator key
       debugShowCheckedModeBanner: false,
@@ -144,13 +151,14 @@ class MellowApp extends StatelessWidget {
         '/settingsdrawer': (context) => const SettingsDrawer(),
         '/terms': (context) => const TermsOfService(),
         '/privacy': (context) => const PrivacyPolicy(),
+        '/dataPrivacy': (context) => const DataPrivacyScreen(),
         '/change_email': (context) => const EmailUpdatePage(),
         '/change_password': (context) => const ChangePassword(),
         '/search_friends': (context) => const SearchFriends(),
         '/messages': (context) => const MessageScreen(),
         '/sendfeedback': (context) => const SendfeedbackScreen(),
         '/reportbugs': (context) => const ReportBugsScreen(),
-        '/taskhistory': (context) => const TaskHistory(),
+        '/taskhistory': (context) => const TaskListScreen(),
         '/no_network': (context) => NoNetworkPage(),
       },
     );

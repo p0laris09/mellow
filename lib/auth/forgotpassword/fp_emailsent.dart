@@ -45,7 +45,7 @@ class ForgotPasswordEmailSent extends StatelessWidget {
                   // Navigate to the SignInPage
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (context) => SignInPage()),
+                    MaterialPageRoute(builder: (context) => const SignInPage()),
                     (route) => false,
                   );
                 },
