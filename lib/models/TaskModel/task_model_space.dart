@@ -41,7 +41,7 @@ class Task {
     weight = weightedPriority + weightedUrgency + weightedComplexity;
 
     // Debugging: Print updated weight
-    print("Updated Task Weight for '${taskName}': $weight");
+    print("Updated Task Weight for '$taskName': $weight");
   }
 
   // Validate task times
@@ -103,7 +103,7 @@ class TaskManager {
               (task.userId == currentUserId ||
                   task.assignedTo.contains(currentUserId)) &&
               task.spaceId == newTask.spaceId && // Check for spaceId match
-              task.startTime.isBefore(start.add(Duration(hours: 1))) &&
+              task.startTime.isBefore(start.add(const Duration(hours: 1))) &&
               task.endTime.isAfter(start))
           .length;
 
@@ -120,7 +120,7 @@ class TaskManager {
       }
 
       // Move to the next hour to check for overlap in that hour
-      start = start.add(Duration(hours: 1));
+      start = start.add(const Duration(hours: 1));
     }
 
     // If no hour exceeded the task preference, allow the task to be added
@@ -200,7 +200,7 @@ class TaskManager {
       List<Task> overloadedTasks = timeSlots[slot]!;
       if (overloadedTasks.length > 1) {
         for (var task in overloadedTasks) {
-          DateTime newStartTime = task.startTime.add(Duration(hours: 1));
+          DateTime newStartTime = task.startTime.add(const Duration(hours: 1));
           task.startTime = newStartTime;
         }
       }
@@ -279,7 +279,7 @@ class TaskManager {
       Task task, int numSuggestions) async {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
-    Duration interval = Duration(hours: 1);
+    Duration interval = const Duration(hours: 1);
 
     DateTime endOfDay =
         DateTime(current.year, current.month, current.day, 23, 59, 59);

@@ -3,7 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart'; // For better icons
 import 'package:mellow/auth/onboarding/onboarding.dart';
 
 class IntroductionScreen extends StatefulWidget {
-  const IntroductionScreen({Key? key}) : super(key: key);
+  const IntroductionScreen({super.key});
 
   @override
   _IntroductionScreenState createState() => _IntroductionScreenState();

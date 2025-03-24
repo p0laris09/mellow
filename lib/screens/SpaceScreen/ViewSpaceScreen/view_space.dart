@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:mellow/screens/SpaceScreen/SpaceActivity/space_activity_feed.dart';
+import 'package:mellow/screens/TaskCreation/task_creation_duo.dart';
 import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
 import 'package:mellow/screens/SpaceScreen/SpaceTasks/space_tasks_screen.dart';
 import 'package:mellow/screens/SpaceScreen/SpaceSettings/space_setting_screen.dart';
@@ -83,19 +84,30 @@ class _ViewSpaceState extends State<ViewSpace> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.message, color: Colors.white),
-            onPressed: () {
-              // Handle message icon press
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      SpaceSettingScreen(spaceId: widget.spaceId),
+                  builder: (context) => FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('spaces')
+                        .doc(widget.spaceId)
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(child: Text("Error: ${snapshot.error}"));
+                      }
+                      return SpaceSettingScreen(
+                        spaceId: widget.spaceId,
+                        spaceName: widget.spaceName,
+                        description: widget.description,
+                      );
+                    },
+                  ),
                 ),
               );
             },
@@ -118,11 +130,26 @@ class _ViewSpaceState extends State<ViewSpace> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TaskCreationSpace()),
-          );
+        onPressed: () async {
+          final spaceDoc = await FirebaseFirestore.instance
+              .collection('spaces')
+              .doc(widget.spaceId)
+              .get();
+          final spaceData = spaceDoc.data() as Map<String, dynamic>;
+          final members = spaceData['members'] as List<dynamic>? ?? [];
+
+          if (members.length == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TaskCreationDuo()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => const TaskCreationSpace()),
+            );
+          }
         },
         backgroundColor: const Color(0xFF2275AA),
         icon: const Icon(Icons.add, color: Colors.white),
@@ -346,6 +373,7 @@ class _ViewSpaceState extends State<ViewSpace> {
                 startDateTime: (task['startTime'] as Timestamp).toDate(),
                 dueDateTime: (task['dueDate'] as Timestamp).toDate(),
                 taskStatus: task['status'] ?? 'Pending',
+                onTaskFinished: () {},
               );
             }).toList(),
             const SizedBox(height: 8),

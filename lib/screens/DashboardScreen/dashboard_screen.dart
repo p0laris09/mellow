@@ -63,7 +63,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   String userName = '';
   List<DocumentSnapshot> _tasks = [];
   List<DocumentSnapshot> _recentSpaces = [];
-  bool hasAnalytics = false;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -76,9 +76,16 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     if (connectivityResult == ConnectivityResult.none) {
       Navigator.of(context).pushReplacementNamed('/no_network');
     } else {
-      _fetchTasks();
-      _loadUserProfile();
-      _fetchRecentSpaces();
+      await Future.wait([
+        _fetchTasks(),
+        _loadUserProfile(),
+        _fetchRecentSpaces(),
+      ]);
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -92,7 +99,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         // Fetch the profile image using the provider, similar to the MyAppBar approach
         await profileImageProvider.fetchProfileImage(user);
 
-        // Check if the widget is still mounted before calling setState
+        // Update state only if necessary
         if (mounted) {
           setState(() {
             profileImageUrl =
@@ -130,16 +137,15 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
           .get();
 
       DateTime now = DateTime.now();
+      WriteBatch batch = FirebaseFirestore.instance.batch();
       for (var task in taskSnapshot.docs) {
         DateTime dueDate = (task['endTime'] as Timestamp).toDate();
         if (dueDate.isBefore(now)) {
           // Update task to overdue if past due date
-          await FirebaseFirestore.instance
-              .collection('tasks')
-              .doc(task.id)
-              .update({'status': 'overdue'});
+          batch.update(task.reference, {'status': 'overdue'});
         }
       }
+      await batch.commit();
     } catch (e) {
       print("Error updating overdue tasks: $e");
     }
@@ -183,7 +189,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         }
       }
 
-      // Check if the widget is still mounted before calling setState
+      // Update state only if necessary
       if (mounted) {
         setState(() {
           _tasks = uniqueTasks;
@@ -254,7 +260,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         return doc; // Returning the original document, you can modify this if needed
       }).toList();
 
-      // Check if the widget is still mounted before calling setState
+      // Update state only if necessary
       if (mounted) {
         setState(() {
           _recentSpaces = processedSpaces; // Use the processed spaces list
@@ -270,6 +276,9 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
     if (connectivityResult == ConnectivityResult.none) {
       Navigator.of(context).pushReplacementNamed('/no_network');
     } else {
+      setState(() {
+        isLoading = true;
+      });
       await _checkConnectivityAndLoadData();
     }
   }
@@ -278,68 +287,70 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _refreshPage,
-      child: FutureBuilder<String?>(
-        future: _getFirstName(),
-        builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else {
-            final String firstName = snapshot.data ?? 'User';
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.white,
-                        backgroundImage: profileImageUrl.isNotEmpty
-                            ? NetworkImage(profileImageUrl)
-                            : null,
-                        child: profileImageUrl.isEmpty
-                            ? const Icon(Icons.person, size: 40)
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Hello $firstName!",
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+      child: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : FutureBuilder<String?>(
+              future: _getFirstName(),
+              builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                } else {
+                  final String firstName = snapshot.data ?? 'User';
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: Colors.white,
+                              backgroundImage: profileImageUrl.isNotEmpty
+                                  ? NetworkImage(profileImageUrl)
+                                  : null,
+                              child: profileImageUrl.isEmpty
+                                  ? const Icon(Icons.person, size: 40)
+                                  : null,
                             ),
-                          ),
-                          const Text(
-                            "Have a nice day.",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w300,
-                              color: Colors.black87,
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Hello $firstName!",
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const Text(
+                                  "Have a nice day.",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w300,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildAnalyticsSection(),
-                  const SizedBox(height: 32),
-                  _buildSpaceSection(),
-                  const SizedBox(height: 32),
-                  _buildTaskSection(),
-                ],
-              ),
-            );
-          }
-        },
-      ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildAnalyticsSection(),
+                        const SizedBox(height: 32),
+                        _buildSpaceSection(),
+                        const SizedBox(height: 32),
+                        _buildTaskSection(),
+                      ],
+                    ),
+                  );
+                }
+              },
+            ),
     );
   }
 
@@ -349,23 +360,14 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Text(
-              "Analytics",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-            ),
-          ),
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('tasks')
-                .where('userId',
-                    isEqualTo: FirebaseAuth.instance.currentUser!.uid)
-                .snapshots(),
+            stream: FirebaseAuth.instance.currentUser != null
+                ? FirebaseFirestore.instance
+                    .collection('tasks')
+                    .where('userId',
+                        isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+                    .snapshots()
+                : null,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return const Text(
@@ -376,7 +378,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Text(
-                  "No tasks available for analytics.",
+                  "You have no tasks.",
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 );
               }
@@ -529,8 +531,10 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                   String name = task['taskName'] ?? 'Unnamed Task';
                   String taskStatus = task['status'] ?? 'pending';
 
-                  // Dynamically set status to overdue if due date is past and status is not 'finished'
-                  if (dueDate.isBefore(now) && taskStatus != 'Finished') {
+                  // Dynamically set status based on current time
+                  if (now.isAfter(startTime) && now.isBefore(dueDate)) {
+                    taskStatus = 'ongoing';
+                  } else if (now.isAfter(dueDate)) {
                     taskStatus = 'overdue';
                   }
 
@@ -549,6 +553,9 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       startDateTime: startTime,
                       dueDateTime: dueDate,
                       taskStatus: taskStatus,
+                      onTaskFinished: () {
+                        // Add your logic here for when the task is finished
+                      },
                     ),
                   );
                 },

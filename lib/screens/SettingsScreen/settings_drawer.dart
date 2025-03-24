@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:mellow/screens/SettingsScreen/AccountInformation/account_information_page.dart';
 import 'package:mellow/screens/SettingsScreen/settings_page.dart';
+import 'package:mellow/screens/TaskPreference/view_task_preference.dart';
 
 class SettingsDrawer extends StatefulWidget {
   const SettingsDrawer({super.key});
@@ -199,7 +200,22 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   );
                 },
               ),
-
+              ListTile(
+                leading: const Icon(Icons.task, color: Colors.black),
+                title: const Text('Task Preference',
+                    style: TextStyle(color: Colors.black)),
+                trailing:
+                    const Icon(Icons.arrow_forward_ios, color: Colors.grey),
+                onTap: () {
+                  // Navigate to ViewTaskPreferencePage
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ViewTaskPreference(),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading:
                     const Icon(Icons.bug_report_sharp, color: Colors.black),
@@ -214,7 +230,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   Navigator.pushNamed(context, '/reportbugs');
                 },
               ),
-
               ListTile(
                 leading: const Icon(Icons.feedback, color: Colors.black),
                 title: const Text(
@@ -228,7 +243,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   Navigator.pushNamed(context, '/sendfeedback');
                 },
               ),
-
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.black),
                 title:

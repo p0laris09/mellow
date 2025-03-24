@@ -1,12 +1,344 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:collection/collection.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/models/TaskModel/task_model_duo.dart';
 
 class TaskCreationDuo extends StatefulWidget {
   const TaskCreationDuo({super.key});
 
   @override
   State<TaskCreationDuo> createState() => _TaskCreationDuoState();
+}
+
+class TaskManager {
+  List<TaskDuo> tasks = [];
+
+  Future<void> loadTasksFromFirestore(
+      String assignedTo, Map<String, double> criteriaWeights) async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedTo', isEqualTo: assignedTo)
+          .get();
+
+      tasks = querySnapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        TaskDuo task = TaskDuo(
+          userId: data['userId'],
+          taskName: data['taskName'],
+          dueDate: (data['dueDate'] as Timestamp).toDate(),
+          startTime: (data['startTime'] as Timestamp).toDate(),
+          endTime: (data['endTime'] as Timestamp).toDate(),
+          description: data['description'] ?? '',
+          priority: (data['priority'] as num).toDouble(),
+          urgency: (data['urgency'] as num).toDouble(),
+          complexity: (data['complexity'] as num).toDouble(),
+          taskType: data['taskType'],
+          assignedTo: data['assignedTo'],
+          createdBy: data['createdBy'],
+        );
+        task.updateWeight(criteriaWeights); // Pass criteriaWeights
+        return task;
+      }).toList();
+
+      print("Loaded ${tasks.length} tasks for user $assignedTo.");
+    } catch (e) {
+      print("Error loading tasks: $e");
+    }
+  }
+
+  Future<int> _getTaskPreference(String assignedTo) async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('task_preference')
+        .doc(assignedTo)
+        .get();
+    if (userDoc.exists) {
+      String taskPreferenceString = userDoc['tasksPerHour'] ?? "4";
+      return _parseTaskPreference(taskPreferenceString);
+    } else {
+      return 4; // Default to 4 if the document does not exist
+    }
+  }
+
+  int _parseTaskPreference(String taskPreferenceString) {
+    final RegExp regex = RegExp(r'(\d+)');
+    final match = regex.firstMatch(taskPreferenceString);
+    if (match != null) {
+      return int.parse(match.group(1)!);
+    }
+    return 4; // Default to 4 if no number is found
+  }
+
+  Future<List<DateTime>> suggestBestTimes(
+      TaskDuo newTask, String assignedTo) async {
+    List<DateTime> bestTimes = [];
+    Duration taskDuration = newTask.endTime.difference(newTask.startTime);
+
+    const int daysToCheck = 7;
+    DateTime now = DateTime.now();
+    int taskPreference = await _getTaskPreference(assignedTo);
+
+    for (int i = 0; i < daysToCheck; i++) {
+      DateTime checkDate = now.add(Duration(days: i));
+      DateTime startOfDay =
+          DateTime(checkDate.year, checkDate.month, checkDate.day, 8, 0);
+      DateTime endOfDay =
+          DateTime(checkDate.year, checkDate.month, checkDate.day, 20, 0);
+
+      for (DateTime time = startOfDay;
+          time.isBefore(endOfDay);
+          time = time.add(Duration(minutes: 30))) {
+        DateTime proposedStart = time;
+        DateTime proposedEnd = proposedStart.add(taskDuration);
+
+        // Check for the number of tasks in the proposed time slot
+        int taskCount = tasks
+            .where((task) =>
+                task.startTime.isBefore(proposedEnd) &&
+                task.endTime.isAfter(proposedStart))
+            .length;
+
+        // Ensure the number of tasks does not exceed the user's preference
+        if (taskCount < taskPreference &&
+            proposedStart.isAfter(now.subtract(Duration(minutes: 5)))) {
+          bestTimes.add(proposedStart);
+          print("Valid slot found: ${proposedStart.toIso8601String()}");
+
+          // Stop once we've found 2 best times
+          if (bestTimes.length >= 2) break;
+        }
+      }
+
+      // Stop after finding 2 best times across days
+      if (bestTimes.length >= 2) break;
+    }
+
+    // Return the best times (up to 2), or an empty list if no valid times are found
+    return bestTimes.isNotEmpty ? bestTimes.take(2).toList() : [];
+  }
+
+  Future<void> addTaskWithConflictResolution(
+    TaskDuo newTask,
+    BuildContext context,
+    String? assignedTo,
+    Function(TaskDuo) onTaskResolved,
+    Map<String, double> criteriaWeights,
+  ) async {
+    if (assignedTo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    // Adjust task details based on existing tasks with the same name
+    adjustTaskDetails(newTask);
+
+    // Update the task's weight before checking conflicts
+    newTask.updateWeight(criteriaWeights);
+
+    // Initialize task count with the new task
+    int taskCount = 1;
+
+    // Check for any conflicts and calculate the number of overlapping tasks
+    for (var task in tasks) {
+      task.updateWeight(
+          criteriaWeights); // Ensure each task's weight is updated
+      if (newTask.overlapsWith(task)) {
+        taskCount++; // Increment task count for each conflicting task
+        print(
+            "Conflict with task: ${task.taskName}, Task count now: $taskCount");
+      }
+    }
+
+    print("Total task count after checking for conflicts: $taskCount");
+
+    // Get the user's task preference
+    int taskPreference = await _getTaskPreference(assignedTo);
+
+    // Check if task count exceeds the user's preference
+    if (taskCount > taskPreference) {
+      print(
+          "Task count exceeds the user's preference, showing conflict dialog.");
+      await showConflictDialog(newTask, context, onTaskResolved, assignedTo);
+    } else {
+      // No conflict, add the task directly
+      print("No conflict detected, adding the task directly.");
+      onTaskResolved(newTask); // Immediately resolve the task
+    }
+  }
+
+  // Automatically adjust task details based on existing tasks with the same name
+  void adjustTaskDetails(TaskDuo newTask) {
+    for (var task in tasks) {
+      if (task.assignedTo == newTask.assignedTo &&
+          task.taskName == newTask.taskName) {
+        // Adjust priority, urgency, and complexity
+        newTask.priority = task.priority;
+        newTask.urgency = task.urgency;
+        newTask.complexity = task.complexity;
+
+        // Adjust due date, start time, and end time based on the day of the week
+        DateTime now = DateTime.now();
+        DateTime adjustedDueDate = task.dueDate;
+        DateTime adjustedStartTime = task.startTime;
+        DateTime adjustedEndTime = task.endTime;
+
+        // Ensure the adjusted times are in the future
+        if (adjustedDueDate.isBefore(now)) {
+          int daysToAdd = (now.weekday - task.dueDate.weekday) % 7;
+          if (daysToAdd <= 0) {
+            daysToAdd += 7;
+          }
+          adjustedDueDate = now.add(Duration(days: daysToAdd));
+        }
+
+        adjustedStartTime = DateTime(
+          adjustedDueDate.year,
+          adjustedDueDate.month,
+          adjustedDueDate.day,
+          task.startTime.hour,
+          task.startTime.minute,
+        );
+
+        adjustedEndTime = DateTime(
+          adjustedDueDate.year,
+          adjustedDueDate.month,
+          adjustedDueDate.day,
+          task.endTime.hour,
+          task.endTime.minute,
+        );
+
+        // If the adjusted start time is before now, move it to the next day
+        if (adjustedStartTime.isBefore(now)) {
+          adjustedStartTime = adjustedStartTime.add(Duration(days: 1));
+          adjustedEndTime = adjustedEndTime.add(Duration(days: 1));
+        }
+
+        newTask.dueDate = adjustedDueDate;
+        newTask.startTime = adjustedStartTime;
+        newTask.endTime = adjustedEndTime;
+
+        print(
+            'Adjusted task details for "${newTask.taskName}" based on existing task.');
+        break;
+      }
+    }
+  }
+
+  Future<void> showConflictDialog(TaskDuo conflictingTask, BuildContext context,
+      Function(TaskDuo) onTaskResolved, String assignedTo) async {
+    List<DateTime> bestTimes =
+        await suggestBestTimes(conflictingTask, assignedTo);
+    final duration =
+        conflictingTask.endTime.difference(conflictingTask.startTime);
+
+    if (bestTimes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No available time slots found.')),
+      );
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Task Conflict Detected',
+            style: TextStyle(
+              color: Color(0xFF2275AA),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.',
+                style: const TextStyle(color: Colors.black),
+              ),
+              const SizedBox(height: 16),
+              for (var i = 0; i < bestTimes.length; i++)
+                _buildTimeCard(
+                  context: context,
+                  time: bestTimes[i],
+                  label: i == 0 ? "Suggested Best Time" : "Second Best Time",
+                  onSelect: () {
+                    // Update task's start and end time here
+                    conflictingTask.startTime = bestTimes[i];
+                    conflictingTask.endTime = bestTimes[i].add(duration);
+                    onTaskResolved(
+                        conflictingTask); // Resolve with updated task
+                    Navigator.pop(context); // Close dialog
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+              },
+              child: const Text(
+                'Change Time Manually',
+                style: TextStyle(color: Color(0xFF2275AA)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTimeCard({
+    required BuildContext context,
+    required DateTime time,
+    required String label,
+    required VoidCallback onSelect,
+  }) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF2275AA),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              DateFormat('yyyy-MM-dd HH:mm').format(time),
+              style: const TextStyle(fontSize: 14, color: Colors.black),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: ElevatedButton(
+                onPressed: onSelect,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFF2275AA),
+                ),
+                child: const Text('Choose This Time'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TaskCreationDuoState extends State<TaskCreationDuo> {
@@ -17,27 +349,100 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
   final TextEditingController _descriptionController = TextEditingController();
 
   String taskType = 'duo';
-  String? _selectedFriends;
-
-  final List<String> _friends = [
-    // Add friends here
-  ];
-
-  int _descriptionCharCount = 0;
-  double _priority = 1;
-  double _urgency = 1;
-  double _complexity = 1;
+  String? _selectedMember;
+  String? _selectedDuoSpace;
+  final List<String> _DuoSpace = [];
+  final List<String> _member = [];
+  Map<String, String> _memberMap = {}; // Define the _memberMap variable
 
   @override
   void initState() {
     super.initState();
-
+    _fetchDuoSpacesAndMembers();
     _descriptionController.addListener(() {
       setState(() {
         _descriptionCharCount = _descriptionController.text.length;
       });
     });
   }
+
+  Future<void> _fetchDuoSpacesAndMembers() async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    try {
+      // Fetch Duo Spaces
+      QuerySnapshot duoSpacesSnapshot = await FirebaseFirestore.instance
+          .collection('spaces')
+          .where('members', arrayContains: userId)
+          .where('spaceType', isEqualTo: 'duo')
+          .get();
+
+      List<String> duoSpaces =
+          duoSpacesSnapshot.docs.map((doc) => doc['name'] as String).toList();
+
+      setState(() {
+        _DuoSpace.addAll(duoSpaces);
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching duo spaces: $e')),
+      );
+    }
+  }
+
+  Future<void> _fetchMembersOfSelectedSpace(String selectedSpace) async {
+    try {
+      // Fetch the selected space document
+      QuerySnapshot spaceSnapshot = await FirebaseFirestore.instance
+          .collection('spaces')
+          .where('name', isEqualTo: selectedSpace)
+          .get();
+
+      if (spaceSnapshot.docs.isNotEmpty) {
+        DocumentSnapshot spaceDoc = spaceSnapshot.docs.first;
+        List<dynamic> memberIds = spaceDoc['members'];
+
+        // Fetch Members of the selected space
+        Map<String, String> members = {};
+        for (var memberId in memberIds) {
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(memberId)
+              .get();
+          String memberName = '${userDoc['firstName']} ${userDoc['lastName']}';
+          if (!members.containsKey(memberId)) {
+            members[memberId] = memberName;
+          }
+        }
+
+        setState(() {
+          _memberMap = members; // Store the UID and name in a map
+          _member.clear();
+          _member
+              .addAll(members.values); // Populate the _member list with names
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Error fetching members of the selected space: $e')),
+      );
+    }
+  }
+
+  int _descriptionCharCount = 0;
+  double _priority = 1;
+  double _urgency = 1;
+  double _complexity = 1;
+
+  // State variable for the toggle button
+  bool _autoFillEnabled = true;
 
   Future<void> _selectDateTime(
       BuildContext context, TextEditingController controller) async {
@@ -53,7 +458,7 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
             primaryColor:
                 const Color(0xFF2275AA), // Match the page primary color
             hintColor: const Color(0xFF2275AA), // Match the page accent color
-            colorScheme: ColorScheme.light(primary: const Color(0xFF2275AA)),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF2275AA)),
             buttonTheme:
                 const ButtonThemeData(textTheme: ButtonTextTheme.primary),
           ),
@@ -104,23 +509,176 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
     }
   }
 
-  void _createTask() {
-    if (_taskNameController.text.isEmpty) {
+  Future<void> _createTaskInFirestore() async {
+    String taskName = _taskNameController.text.trim();
+    String? createdBy = FirebaseAuth.instance.currentUser?.uid;
+
+    if (createdBy == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task name cannot be empty.')),
+        const SnackBar(content: Text('User not authenticated')),
       );
       return;
     }
 
-    if (_selectedFriends == null) {
+    String? selectedMemberUid = _memberMap.entries
+        .firstWhereOrNull((entry) => entry.value == _selectedMember)
+        ?.key;
+
+    if (selectedMemberUid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select a friend to share the task with.')),
+        const SnackBar(content: Text('Selected member UID not found')),
       );
       return;
     }
 
-    // Implement task creation logic here
+    TaskManager taskManager = TaskManager();
+    Map<String, double> criteriaWeights = {
+      'priority': _priority,
+      'urgency': _urgency,
+      'complexity': _complexity,
+    };
+
+    // Load tasks and wait until they are retrieved
+    await taskManager.loadTasksFromFirestore(
+        selectedMemberUid, criteriaWeights);
+
+    print("Loaded tasks count: ${taskManager.tasks.length}");
+
+    if (taskManager.tasks.isEmpty) {
+      print("No tasks found for selected member");
+    } else {
+      // Find existing task assigned to the selected user
+      TaskDuo? existingTask;
+      for (var task in taskManager.tasks) {
+        print(
+            "Checking task: ${task.taskName}, assignedTo: ${task.assignedTo}");
+        if (task.assignedTo == selectedMemberUid) {
+          existingTask = task;
+          break;
+        }
+      }
+
+      if (_autoFillEnabled && existingTask != null) {
+        print("Auto-filling task: ${existingTask.taskName}");
+        setState(() {
+          _taskNameController.text = existingTask!.taskName;
+          _descriptionController.text = existingTask.description;
+          _priority = existingTask.priority;
+          _urgency = existingTask.urgency;
+          _complexity = existingTask.complexity;
+        });
+
+        // Suggest best time slots
+        List<DateTime> bestTimes =
+            await taskManager.suggestBestTimes(existingTask, selectedMemberUid);
+
+        if (bestTimes.isEmpty) {
+          print("No available time slots found.");
+        } else {
+          print("Suggested time slot: ${bestTimes[0]}");
+          setState(() {
+            _dueDateController.text =
+                DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[0]);
+            _startTimeController.text =
+                DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[0]);
+            _endTimeController.text = DateFormat('yyyy-MM-dd HH:mm').format(
+                bestTimes[0].add(
+                    existingTask!.endTime.difference(existingTask.startTime)));
+          });
+        }
+        return; // **Exit to prevent duplicate task creation**
+      }
+    }
+
+    // Validate required fields
+    if (_taskNameController.text.isEmpty ||
+        _dueDateController.text.isEmpty ||
+        _startTimeController.text.isEmpty ||
+        _endTimeController.text.isEmpty) {
+      _showAlertDialog('Please fill in all fields');
+      return;
+    }
+
+    DateTime dueDate =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_dueDateController.text);
+    DateTime startTime =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_startTimeController.text);
+    DateTime endTime =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_endTimeController.text);
+
+    TaskDuo newTask = TaskDuo(
+      userId: selectedMemberUid,
+      taskName: taskName,
+      dueDate: dueDate,
+      startTime: startTime,
+      endTime: endTime,
+      description: _descriptionController.text,
+      priority: _priority,
+      urgency: _urgency,
+      complexity: _complexity,
+      taskType: taskType,
+      assignedTo: selectedMemberUid,
+      createdBy: createdBy,
+    );
+
+    await taskManager.addTaskWithConflictResolution(
+      newTask,
+      context,
+      selectedMemberUid,
+      (resolvedTask) async {
+        await _addTaskToFirestore(resolvedTask, createdBy);
+      },
+      criteriaWeights,
+    );
+  }
+
+  void _showAlertDialog(String errorMessage) {
+    print(errorMessage); // Print the error message to the debug console
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title:
+              const Text("Empty Fields", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addTaskToFirestore(TaskDuo task, String createdBy) async {
+    await FirebaseFirestore.instance.collection('tasks').add({
+      'taskName': task.taskName,
+      'dueDate': Timestamp.fromDate(task.dueDate),
+      'startTime': Timestamp.fromDate(task.startTime),
+      'endTime': Timestamp.fromDate(task.endTime),
+      'description': task.description,
+      'priority': task.priority,
+      'urgency': task.urgency,
+      'complexity': task.complexity,
+      'weight': task.weight,
+      'createdAt': Timestamp.now(),
+      'userId': task.userId,
+      'status': 'pending',
+      'taskType': task.taskType,
+      'assignedTo': task.assignedTo,
+      'createdBy': createdBy,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Task created successfully')),
+    );
+    Navigator.pop(context);
   }
 
   @override
@@ -179,33 +737,33 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                   const SizedBox(height: 9),
                   SizedBox(
                     width: 300,
-                    child: _friends.isEmpty
+                    child: _DuoSpace.isEmpty
                         ? const Text(
-                            "No friends to share task",
+                            "No shared space to choose from.",
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
                           )
                         : DropdownButtonFormField<String>(
-                            value: _selectedFriends,
+                            value: _selectedDuoSpace,
                             dropdownColor: Colors.blueGrey,
                             decoration: const InputDecoration(
-                              labelText: "Share with",
+                              labelText: "Shared Space",
                               labelStyle: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                               border: UnderlineInputBorder(),
                             ),
-                            items: _friends.map((String friends) {
+                            items: _DuoSpace.map((String duoSpace) {
                               return DropdownMenuItem<String>(
-                                value: friends,
+                                value: duoSpace,
                                 child: ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 250),
                                   child: Text(
-                                    friends,
+                                    duoSpace,
                                     overflow: TextOverflow.visible,
                                     maxLines: null,
                                     style: const TextStyle(color: Colors.white),
@@ -215,16 +773,21 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                             }).toList(),
                             onChanged: (String? newValue) {
                               setState(() {
-                                _selectedFriends = newValue;
+                                _selectedDuoSpace = newValue;
+                                _selectedMember = null; // Reset selected member
+                                if (newValue != null) {
+                                  _fetchMembersOfSelectedSpace(
+                                      newValue); // Fetch members of the selected space
+                                }
                               });
                             },
                             selectedItemBuilder: (BuildContext context) {
-                              return _friends.map((String friends) {
+                              return _DuoSpace.map((String duoSpace) {
                                 return ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 250),
                                   child: Text(
-                                    friends,
+                                    duoSpace,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(color: Colors.white),
                                   ),
@@ -234,6 +797,55 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                             menuMaxHeight: 300,
                           ),
                   ),
+                  const SizedBox(height: 9),
+                  if (_selectedDuoSpace != null)
+                    SizedBox(
+                      width: 300,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedMember,
+                        dropdownColor: Colors.blueGrey,
+                        decoration: const InputDecoration(
+                          labelText: "Share with",
+                          labelStyle: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          border: UnderlineInputBorder(),
+                        ),
+                        items: _member.map((String friends) {
+                          return DropdownMenuItem<String>(
+                            value: friends,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                friends,
+                                overflow: TextOverflow.visible,
+                                maxLines: null,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedMember = newValue;
+                          });
+                        },
+                        selectedItemBuilder: (BuildContext context) {
+                          return _member.map((String friends) {
+                            return ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                friends,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            );
+                          }).toList();
+                        },
+                        menuMaxHeight: 300,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -397,19 +1009,37 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                     });
                   }),
                   const SizedBox(height: 45),
-                  Center(
-                    child: ElevatedButton(
-                      onPressed: _createTask,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 50,
-                          vertical: 20,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _createTaskInFirestore,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 50,
+                            vertical: 20,
+                          ),
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF2275AA),
                         ),
-                        foregroundColor: Colors.white,
-                        backgroundColor: const Color(0xFF2275AA),
+                        child: const Text('Create Task'),
                       ),
-                      child: const Text('Create Task'),
-                    ),
+                      const SizedBox(width: 20),
+                      IconButton(
+                        icon: Icon(
+                          _autoFillEnabled
+                              ? Icons.auto_awesome
+                              : Icons.auto_awesome_outlined,
+                          color: _autoFillEnabled ? Colors.green : Colors.red,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _autoFillEnabled = !_autoFillEnabled;
+                          });
+                        },
+                        tooltip: 'Toggle Auto-Fill',
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -435,6 +1065,10 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
         const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            Text('Very Low',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
             Text('Low',
                 style: TextStyle(
                     fontSize: 12,
@@ -447,18 +1081,17 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                 style: TextStyle(
                     fontSize: 12,
                     color: Colors.black)), // Set text color to black
+            Text('Very High',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
           ],
         ),
         Slider(
           value: value,
           min: 1, // Start at 1
-          max: 3, // End at 3
-          divisions: 2, // Only 3 values: 1, 2, 3
-          label: value == 1
-              ? 'Low'
-              : value == 2
-                  ? 'Medium'
-                  : 'High',
+          max: 5, // End at 5
+          divisions: 4, // Only 5 values: 1, 2, 3, 4, 5
           onChanged: onChanged,
           activeColor: const Color(0xFF2275AA), // Set active color to blue
           inactiveColor:

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:collection/collection.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,20 +25,24 @@ class TaskManager {
           .get();
 
       tasks = querySnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
         Task task = Task(
-          userId: data['userId'],
-          taskName: data['taskName'],
-          dueDate: (data['dueDate'] as Timestamp).toDate(),
-          startTime: (data['startTime'] as Timestamp).toDate(),
-          endTime: (data['endTime'] as Timestamp).toDate(),
-          description: data['description'] ?? '',
-          priority: (data['priority'] as num).toDouble(),
-          urgency: (data['urgency'] as num).toDouble(),
-          complexity: (data['complexity'] as num).toDouble(),
-          taskType: data['taskType'],
+          userId: data['userId'] ?? '', // Ensure userId is not null
+          taskName: data['taskName'] ?? 'Untitled', // Default name if missing
+          dueDate: (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          startTime:
+              (data['startTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          endTime: (data['endTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          description: data['description'] ?? '', // Default empty description
+          priority: (data['priority'] as num?)?.toDouble() ?? 1.0,
+          urgency: (data['urgency'] as num?)?.toDouble() ?? 1.0,
+          complexity: (data['complexity'] as num?)?.toDouble() ?? 1.0,
+          taskType: data['taskType'] ?? 'general', // Provide default task type
+          assignedTo: data['assignedTo'] ?? 'unassigned', // Default if missing
         );
-        task.updateWeight(criteriaWeights); // Pass criteriaWeights
+
+        task.updateWeight(criteriaWeights);
         return task;
       }).toList();
 
@@ -47,12 +52,31 @@ class TaskManager {
     }
   }
 
-  List<DateTime> suggestBestTimes(Task newTask, double weightLimit) {
+  Future<int> _getTaskPreference(String userId) async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('task_preference')
+        .doc(userId)
+        .get();
+    String taskPreferenceString = userDoc['tasksPerHour'] ?? "4";
+    return _parseTaskPreference(taskPreferenceString);
+  }
+
+  int _parseTaskPreference(String taskPreferenceString) {
+    final RegExp regex = RegExp(r'(\d+)');
+    final match = regex.firstMatch(taskPreferenceString);
+    if (match != null) {
+      return int.parse(match.group(1)!);
+    }
+    return 4; // Default to 4 if no number is found
+  }
+
+  Future<List<DateTime>> suggestBestTimes(Task newTask, String userId) async {
     List<DateTime> bestTimes = [];
     Duration taskDuration = newTask.endTime.difference(newTask.startTime);
 
     const int daysToCheck = 7;
     DateTime now = DateTime.now();
+    int taskPreference = await _getTaskPreference(userId);
 
     for (int i = 0; i < daysToCheck; i++) {
       DateTime checkDate = now.add(Duration(days: i));
@@ -67,22 +91,15 @@ class TaskManager {
         DateTime proposedStart = time;
         DateTime proposedEnd = proposedStart.add(taskDuration);
 
-        // Debugging: Print the proposed time being checked
-        print("Checking time: ${proposedStart.toIso8601String()}");
-
-        // Check for cumulative weight in the proposed time slot (without including the new task)
-        double hourWeight = tasks
+        // Check for the number of tasks in the proposed time slot
+        int taskCount = tasks
             .where((task) =>
                 task.startTime.isBefore(proposedEnd) &&
                 task.endTime.isAfter(proposedStart))
-            .fold(0.0, (sum, task) => sum + task.weight);
+            .length;
 
-        // Debugging: Print the weight for the time slot
-        print(
-            "hourWeight: $hourWeight, newTask.weight: ${newTask.weight}, weightLimit: $weightLimit");
-
-        // Ensure the total weight does not exceed the limit, including the new task's weight
-        if (hourWeight + newTask.weight <= weightLimit &&
+        // Ensure the number of tasks does not exceed the user's preference
+        if (taskCount < taskPreference &&
             proposedStart.isAfter(now.subtract(Duration(minutes: 5)))) {
           bestTimes.add(proposedStart);
           print("Valid slot found: ${proposedStart.toIso8601String()}");
@@ -105,35 +122,45 @@ class TaskManager {
     BuildContext context,
     String? userId,
     Function(Task) onTaskResolved,
-    double weightLimit,
     Map<String, double> criteriaWeights,
   ) async {
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
     // Adjust task details based on existing tasks with the same name
     adjustTaskDetails(newTask);
 
     // Update the task's weight before checking conflicts
     newTask.updateWeight(criteriaWeights);
 
-    // Initialize total weight with the new task's weight
-    double totalWeight = newTask.weight;
+    // Initialize task count with the new task
+    int taskCount = 1;
 
-    // Check for any conflicts and calculate the cumulative weight for overlapping tasks
+    // Check for any conflicts and calculate the number of overlapping tasks
     for (var task in tasks) {
       task.updateWeight(
           criteriaWeights); // Ensure each task's weight is updated
       if (newTask.overlapsWith(task)) {
-        totalWeight += task.weight; // Add weight of the conflicting task
+        taskCount++; // Increment task count for each conflicting task
         print(
-            "Conflict with task: ${task.taskName}, Weight: ${task.weight}, Total weight now: $totalWeight");
+            "Conflict with task: ${task.taskName}, Task count now: $taskCount");
       }
     }
 
-    print("Total weight after checking for conflicts: $totalWeight");
+    print("Total task count after checking for conflicts: $taskCount");
 
-    // Check if total weight exceeds the limit
-    if (totalWeight > weightLimit) {
-      print("Total weight exceeds the limit, showing conflict dialog.");
-      await showConflictDialog(newTask, context, onTaskResolved, weightLimit);
+    // Get the user's task preference
+    int taskPreference = await _getTaskPreference(userId);
+
+    // Check if task count exceeds the user's preference
+    if (taskCount > taskPreference) {
+      print(
+          "Task count exceeds the user's preference, showing conflict dialog.");
+      await showConflictDialog(newTask, context, onTaskResolved, userId);
     } else {
       // No conflict, add the task directly
       print("No conflict detected, adding the task directly.");
@@ -198,15 +225,22 @@ class TaskManager {
     }
   }
 
-  Future<void> showConflictDialog(Task conflictingTask, BuildContext context,
-      Function(Task) onTaskResolved, double weightLimit) async {
-    List<DateTime> bestTimes = suggestBestTimes(conflictingTask, weightLimit);
+  Future<void> showConflictDialog(
+    Task conflictingTask,
+    BuildContext context,
+    Function(Task) onTaskResolved,
+    String userId,
+  ) async {
+    List<DateTime> bestTimes = await suggestBestTimes(conflictingTask, userId);
     final duration =
         conflictingTask.endTime.difference(conflictingTask.startTime);
 
     if (bestTimes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No available time slots found.')),
+        const SnackBar(
+          content: Text('No available time slots found.'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -214,70 +248,122 @@ class TaskManager {
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            'Task Conflict Detected',
-            style: TextStyle(
-              color: Color(0xFF2275AA),
-              fontWeight: FontWeight.bold,
-            ),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.',
-                style: const TextStyle(color: Colors.black),
-              ),
-              const SizedBox(height: 16),
-              for (var i = 0; i < bestTimes.length; i++)
-                _buildTimeCard(
-                  context: context,
-                  time: bestTimes[i],
-                  label: i == 0 ? "Suggested Best Time" : "Second Best Time",
-                  onSelect: () {
-                    // Update task's start and end time here
-                    conflictingTask.startTime = bestTimes[i];
-                    conflictingTask.endTime = bestTimes[i].add(duration);
-                    onTaskResolved(
-                        conflictingTask); // Resolve with updated task
-                    Navigator.pop(context); // Close dialog
-                  },
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title
+                const Text(
+                  'Task Conflict Detected',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2275AA),
+                  ),
                 ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-              },
-              child: const Text(
-                'Change Time Manually',
-                style: TextStyle(color: Color(0xFF2275AA)),
-              ),
+                const SizedBox(height: 12),
+                // Conflict Message
+                Text(
+                  'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule. Please select a new time:',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Suggested Times
+                for (var i = 0; i < bestTimes.length; i++)
+                  _buildTimeCard(
+                    context: context,
+                    startTime: bestTimes[i],
+                    endTime: bestTimes[i].add(duration),
+                    label: i == 0
+                        ? "Suggested Best Time"
+                        : "Alternative Time ${i + 1}",
+                    onSelect: () {
+                      conflictingTask.startTime = bestTimes[i];
+                      conflictingTask.endTime = bestTimes[i].add(duration);
+                      onTaskResolved(conflictingTask);
+                      Navigator.pop(context);
+                    },
+                  ),
+                const SizedBox(height: 16),
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF2275AA)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF2275AA),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2275AA),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Change Manually',
+                          style: TextStyle(fontSize: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
 
+  // Improved Time Card with Start and End Time
   Widget _buildTimeCard({
     required BuildContext context,
-    required DateTime time,
+    required DateTime startTime,
+    required DateTime endTime,
     required String label,
     required VoidCallback onSelect,
   }) {
     return Card(
       elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Label
             Text(
               label,
               style: const TextStyle(
@@ -286,20 +372,46 @@ class TaskManager {
                 color: Color(0xFF2275AA),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              DateFormat('yyyy-MM-dd HH:mm').format(time),
-              style: const TextStyle(fontSize: 14, color: Colors.black),
+            const SizedBox(height: 6),
+            // Start Time
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                Text(
+                  'Start: ${DateFormat('EEEE, MMM d, hh:mm a').format(startTime)}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // End Time
+            Row(
+              children: [
+                const Icon(Icons.access_time_filled,
+                    size: 20, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  'End: ${DateFormat('EEEE, MMM d, hh:mm a').format(endTime)}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            Center(
+            // Choose Time Button
+            Align(
+              alignment: Alignment.centerRight,
               child: ElevatedButton(
                 onPressed: onSelect,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: const Color(0xFF2275AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Text('Choose This Time'),
+                child: const Text('Choose'),
               ),
             ),
           ],
@@ -316,13 +428,16 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   final TextEditingController _endTimeController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-// This will be automatically set as 'personal' for personal tasks
+  // This will be automatically set as 'personal' for personal tasks
   String taskType = 'personal';
 
   int _descriptionCharCount = 0;
   double _priority = 1;
   double _urgency = 1;
   double _complexity = 1;
+
+  // State variable for the toggle button
+  bool _autoFillEnabled = true;
 
   @override
   void initState() {
@@ -402,227 +517,115 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
 
   Future<void> _createTaskInFirestore() async {
     String taskName = _taskNameController.text;
-    String dueDateString = _dueDateController.text;
-    String startTimeString = _startTimeController.text;
-    String endTimeString = _endTimeController.text;
-    String description = _descriptionController.text;
     String? userId = FirebaseAuth.instance.currentUser?.uid;
 
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
+      _showAlertDialog('User not authenticated');
       return;
     }
 
-    DateTime? dueDate = dueDateString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(dueDateString)
-        : null;
-    DateTime? startTime = startTimeString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(startTimeString)
-        : null;
-    DateTime? endTime = endTimeString.isNotEmpty
-        ? DateFormat('yyyy-MM-dd HH:mm').parse(endTimeString)
-        : null;
-
-    if (taskName.isNotEmpty &&
-        dueDate != null &&
-        startTime != null &&
-        endTime != null) {
-      Task newTask = Task(
-        userId: userId,
-        taskName: taskName,
-        dueDate: dueDate,
-        startTime: startTime,
-        endTime: endTime,
-        description: description,
-        priority: _priority,
-        urgency: _urgency,
-        complexity: _complexity,
-        taskType: taskType,
-      );
-
-      TaskManager taskManager = TaskManager();
-
-      Map<String, double> criteriaWeights = {
-        'priority': _priority,
-        'urgency': _urgency,
-        'complexity': _complexity,
-      };
-
-      await taskManager.loadTasksFromFirestore(userId, criteriaWeights);
-
-      // Check for existing tasks with the same name
-      Task? existingTask;
-      try {
-        existingTask = taskManager.tasks.firstWhere(
-          (task) => task.taskName == taskName && task.userId == userId,
-        );
-      } catch (e) {
-        existingTask = null;
-      }
-
-      if (existingTask != null) {
-        // Show alert dialog if a matching task is found
-        await _showTaskConflictDialog(
-            newTask, existingTask, taskManager, context);
-      } else {
-        // No conflict, add the task directly
-        await _addTaskToFirestore(newTask, userId);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
+    if (taskName.isEmpty) {
+      _showAlertDialog('Please enter a task name');
+      return;
     }
-  }
 
-  Future<void> _showTaskConflictDialog(Task newTask, Task existingTask,
-      TaskManager taskManager, BuildContext context) async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false, // User must tap a button
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            'The system identified a task with similar information',
-            style: TextStyle(
-              color: Color(0xFF2275AA), // Match the page primary color
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                const Text(
-                  'You have created a task with the same name before.',
-                  style: TextStyle(color: Colors.black),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Existing Task Details:',
-                  style: TextStyle(
-                      color: Colors.black, fontWeight: FontWeight.bold),
-                ),
-                Text('Description: ${newTask.description}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Priority: ${newTask.priority.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Urgency: ${newTask.urgency.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Complexity: ${newTask.complexity.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                const SizedBox(height: 16),
-                const Text(
-                  'Do you want to create the task with the following details?',
-                  style: TextStyle(
-                      color: Colors.black, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                    'Due Date: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.dueDate)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text(
-                    'Start Time: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.startTime)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text(
-                    'End Time: ${DateFormat('yyyy-MM-dd HH:mm').format(existingTask.endTime)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Description: ${existingTask.description}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Priority: ${existingTask.priority.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Urgency: ${existingTask.urgency.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Complexity: ${existingTask.complexity.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Create Exactly How I Made It',
-                  style: TextStyle(color: Color(0xFF2275AA))),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await _addTaskToFirestore(newTask, newTask.userId);
-              },
-            ),
-            TextButton(
-              child: const Text('Create Task Like This',
-                  style: TextStyle(color: Color(0xFF2275AA))),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                taskManager.adjustTaskDetails(newTask);
-                await _showTaskDetailsDialog(newTask, context);
-              },
-            ),
-            TextButton(
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF2275AA))),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
+    TaskManager taskManager = TaskManager();
+
+    Map<String, double> criteriaWeights = {
+      'priority': _priority,
+      'urgency': _urgency,
+      'complexity': _complexity,
+    };
+
+    await taskManager.loadTasksFromFirestore(userId, criteriaWeights);
+
+    // Debugging: Check if tasks are actually loaded
+    print('Loaded tasks: ${taskManager.tasks.map((t) => t.taskName).toList()}');
+
+    Task? existingTask = taskManager.tasks.firstWhereOrNull(
+      (task) => task.taskName == taskName && task.userId == userId,
+    );
+
+    if (_autoFillEnabled && existingTask != null) {
+      setState(() {
+        _descriptionController.text = existingTask.description;
+        _priority = existingTask.priority;
+        _urgency = existingTask.urgency;
+        _complexity = existingTask.complexity;
+      });
+
+      // Suggest best times
+      List<DateTime> bestTimes =
+          await taskManager.suggestBestTimes(existingTask, userId);
+      if (bestTimes.isNotEmpty) {
+        setState(() {
+          _dueDateController.text =
+              DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[0]);
+          _startTimeController.text =
+              DateFormat('yyyy-MM-dd HH:mm').format(bestTimes[0]);
+          _endTimeController.text = DateFormat('yyyy-MM-dd HH:mm').format(
+            bestTimes[0]
+                .add(existingTask.endTime.difference(existingTask.startTime)),
+          );
+        });
+        return;
+      }
+    }
+
+    // Proceed with task creation
+    if (_dueDateController.text.isEmpty ||
+        _startTimeController.text.isEmpty ||
+        _endTimeController.text.isEmpty) {
+      _showAlertDialog('Please fill in all fields');
+      return;
+    }
+
+    DateTime dueDate =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_dueDateController.text);
+    DateTime startTime =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_startTimeController.text);
+    DateTime endTime =
+        DateFormat('yyyy-MM-dd HH:mm').parse(_endTimeController.text);
+
+    Task newTask = Task(
+      userId: userId,
+      taskName: taskName,
+      dueDate: dueDate,
+      startTime: startTime,
+      endTime: endTime,
+      description: _descriptionController.text,
+      priority: _priority,
+      urgency: _urgency,
+      complexity: _complexity,
+      taskType: taskType,
+      assignedTo: '',
+    );
+
+    await taskManager.addTaskWithConflictResolution(
+      newTask,
+      context,
+      userId,
+      (resolvedTask) async {
+        await _addTaskToFirestore(resolvedTask, userId);
       },
+      criteriaWeights,
     );
   }
 
-  Future<void> _showTaskDetailsDialog(
-      Task newTask, BuildContext context) async {
-    return showDialog<void>(
+  void _showAlertDialog(String errorMessage) {
+    print(errorMessage); // Print the error message to the debug console
+    showDialog(
       context: context,
-      barrierDismissible: false, // User must tap a button
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text(
-            'Confirm Task Details',
-            style: TextStyle(
-              color: Color(0xFF2275AA), // Match the page primary color
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                const Text(
-                  'The task will be created with the following details:',
-                  style: TextStyle(color: Colors.black),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                    'Due Date: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.dueDate)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text(
-                    'Start Time: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.startTime)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text(
-                    'End Time: ${DateFormat('yyyy-MM-dd HH:mm').format(newTask.endTime)}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Description: ${newTask.description}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Priority: ${newTask.priority.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Urgency: ${newTask.urgency.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-                Text('Complexity: ${newTask.complexity.toInt()}',
-                    style: const TextStyle(color: Colors.black)),
-              ],
-            ),
-          ),
-          actions: <Widget>[
+          backgroundColor: const Color(0xFF2275AA),
+          title:
+              const Text("Empty Fields", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
             TextButton(
-              child: const Text('Create Task',
-                  style: TextStyle(color: Color(0xFF2275AA))),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await _addTaskToFirestore(newTask, newTask.userId);
-              },
-            ),
-            TextButton(
-              child: const Text('Cancel',
-                  style: TextStyle(color: Color(0xFF2275AA))),
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -646,6 +649,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       'weight': task.weight,
       'createdAt': Timestamp.now(),
       'userId': userId,
+      'assignedTo': task.assignedTo, // Add assignedTo field
       'status': 'pending',
       'taskType': task.taskType,
     });
@@ -876,19 +880,37 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       });
                     }),
                     const SizedBox(height: 25),
-                    Center(
-                      child: ElevatedButton(
-                        onPressed: _createTaskInFirestore,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 50,
-                            vertical: 20,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _createTaskInFirestore,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 50,
+                              vertical: 20,
+                            ),
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xFF2275AA),
                           ),
-                          foregroundColor: Colors.white,
-                          backgroundColor: const Color(0xFF2275AA),
+                          child: const Text('Create Task'),
                         ),
-                        child: const Text('Create Task'),
-                      ),
+                        const SizedBox(width: 20),
+                        IconButton(
+                          icon: Icon(
+                            _autoFillEnabled
+                                ? Icons.auto_awesome
+                                : Icons.auto_awesome_outlined,
+                            color: _autoFillEnabled ? Colors.green : Colors.red,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _autoFillEnabled = !_autoFillEnabled;
+                            });
+                          },
+                          tooltip: 'Toggle Auto-Fill',
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -915,6 +937,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            Text('Very Low',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
             Text('Low',
                 style: TextStyle(
                     fontSize: 12,
@@ -927,18 +953,17 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                 style: TextStyle(
                     fontSize: 12,
                     color: Colors.black)), // Set text color to black
+            Text('Very High',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
           ],
         ),
         Slider(
           value: value,
           min: 1, // Start at 1
-          max: 3, // End at 3
-          divisions: 2, // Only 3 values: 1, 2, 3
-          label: value == 1
-              ? 'Low'
-              : value == 2
-                  ? 'Medium'
-                  : 'High',
+          max: 5, // End at 5
+          divisions: 4, // Allow only whole numbers
           onChanged: onChanged,
           activeColor: const Color(0xFF2275AA), // Set active color to blue
           inactiveColor:

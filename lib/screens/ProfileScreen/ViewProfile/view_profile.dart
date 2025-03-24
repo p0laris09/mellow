@@ -286,16 +286,7 @@ class _ViewProfileState extends State<ViewProfile> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Navigate to the chat screen
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ChatScreen(userId: widget.userId),
-                        ),
-                      );
-                    },
+                    onPressed: () {},
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2275AA),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -303,7 +294,7 @@ class _ViewProfileState extends State<ViewProfile> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text('Message',
+                    child: const Text('Friends',
                         style: TextStyle(color: Colors.white)),
                   ),
                 ),

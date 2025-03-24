@@ -28,8 +28,10 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
 
   Future<void> _selectDate(BuildContext context) async {
     DateTime now = DateTime.now();
-    DateTime maxDate = now.subtract(Duration(days: 365 * 18)); // 18 years ago
-    DateTime minDate = now.subtract(Duration(days: 365 * 50)); // 50 years ago
+    DateTime maxDate =
+        now.subtract(const Duration(days: 365 * 18)); // 18 years ago
+    DateTime minDate =
+        now.subtract(const Duration(days: 365 * 50)); // 50 years ago
 
     DateTime initialDate = now.isAfter(maxDate) ? maxDate : now;
 
@@ -44,7 +46,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
             primaryColor:
                 const Color(0xFF2275AA), // Match the page primary color
             hintColor: const Color(0xFF2275AA), // Match the page accent color
-            colorScheme: ColorScheme.light(primary: const Color(0xFF2275AA)),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF2275AA)),
             buttonTheme:
                 const ButtonThemeData(textTheme: ButtonTextTheme.primary),
           ),
@@ -166,7 +168,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
               context,
               MaterialPageRoute(
                   builder: (context) =>
-                      OnboardingPage()), // Navigate to the onboarding page
+                      const OnboardingPage()), // Navigate to the onboarding page
               (Route<dynamic> route) => false, // Remove all previous routes
             );
           },
@@ -374,7 +376,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) => SignInPage()),
+                                    builder: (context) => const SignInPage()),
                               );
                             },
                             child: const Text(

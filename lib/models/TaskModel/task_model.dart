@@ -12,6 +12,7 @@ class Task {
   double complexity;
   double weight = 0.0;
   String taskType; // New field for task type
+  String assignedTo; // New field for assigned user
 
   Task({
     required this.userId,
@@ -20,22 +21,24 @@ class Task {
     required this.startTime,
     required this.endTime,
     this.description = '',
-    this.priority = 0.0,
-    this.urgency = 0.0,
-    this.complexity = 0.0,
+    this.priority = 1.0,
+    this.urgency = 1.0,
+    this.complexity = 1.0,
     required this.taskType, // Initialize the taskType field
+    required this.assignedTo, // Initialize the assignedTo field
   }) : weight = 0.0; // Initialize weight
 
   // Calculate and update the task's weight based on criteria weights
   void updateWeight(Map<String, double> criteriaWeights) {
-    double weightedPriority = priority * criteriaWeights['priority']!;
-    double weightedUrgency = urgency * criteriaWeights['urgency']!;
-    double weightedComplexity = complexity * criteriaWeights['complexity']!;
+    double weightedPriority = (priority / 5.0) * criteriaWeights['priority']!;
+    double weightedUrgency = (urgency / 5.0) * criteriaWeights['urgency']!;
+    double weightedComplexity =
+        (complexity / 5.0) * criteriaWeights['complexity']!;
 
     weight = weightedPriority + weightedUrgency + weightedComplexity;
 
     // Debugging: Print updated weight
-    print("Updated Task Weight for '${taskName}': $weight");
+    print("Updated Task Weight for '$taskName': $weight");
   }
 
   // Validate task times
@@ -51,14 +54,20 @@ class Task {
 
   // Classify the task using the Eisenhower Matrix
   String categorizeUsingEisenhowerMatrix() {
-    if (urgency > 0.5 && complexity > 0.5) {
-      return 'Quadrant I (Urgent and Important)'; // Do first
-    } else if (urgency <= 0.5 && complexity > 0.5) {
+    return getEisenhowerQuadrant(urgency, priority);
+  }
+
+  String getEisenhowerQuadrant(double urgency, double priority) {
+    if (urgency > 4 && priority > 4) {
+      return 'Quadrant I (Urgent and Important)'; // Do First
+    } else if (urgency <= 2 && priority > 3) {
       return 'Quadrant II (Not Urgent but Important)'; // Schedule
-    } else if (urgency > 0.5 && complexity <= 0.5) {
+    } else if (urgency > 3 && priority <= 2) {
       return 'Quadrant III (Urgent but Not Important)'; // Delegate
-    } else {
+    } else if (urgency <= 1 && priority <= 1) {
       return 'Quadrant IV (Not Urgent and Not Important)'; // Eliminate
+    } else {
+      return 'Uncategorized';
     }
   }
 
@@ -66,7 +75,7 @@ class Task {
   String toString() {
     return 'Task(taskName: $taskName, taskType: $taskType, dueDate: $dueDate, startTime: $startTime, '
         'endTime: $endTime, priority: $priority, urgency: $urgency, '
-        'complexity: $complexity, weight: $weight)';
+        'complexity: $complexity, weight: $weight, assignedTo: $assignedTo)';
   }
 }
 
@@ -76,7 +85,7 @@ class TaskManager {
   Map<String, double> criteriaWeights = {
     'priority': 0.4,
     'urgency': 0.3,
-    'complexity': 0.2,
+    'complexity': 0.3,
   };
 
   TaskManager({required this.currentUserId});
@@ -108,7 +117,7 @@ class TaskManager {
       int taskCount = tasks
           .where((task) =>
               task.userId == currentUserId &&
-              task.startTime.isBefore(start.add(Duration(hours: 1))) &&
+              task.startTime.isBefore(start.add(const Duration(hours: 1))) &&
               task.endTime.isAfter(start))
           .length;
 
@@ -125,7 +134,7 @@ class TaskManager {
       }
 
       // Move to the next hour to check for overlap in that hour
-      start = start.add(Duration(hours: 1));
+      start = start.add(const Duration(hours: 1));
     }
 
     // If no hour exceeded the task preference, allow the task to be added
@@ -205,7 +214,7 @@ class TaskManager {
       List<Task> overloadedTasks = timeSlots[slot]!;
       if (overloadedTasks.length > 1) {
         for (var task in overloadedTasks) {
-          DateTime newStartTime = task.startTime.add(Duration(hours: 1));
+          DateTime newStartTime = task.startTime.add(const Duration(hours: 1));
           task.startTime = newStartTime;
         }
       }
@@ -283,7 +292,7 @@ class TaskManager {
       Task task, int numSuggestions) async {
     List<DateTime> suggestions = [];
     DateTime current = task.startTime;
-    Duration interval = Duration(hours: 1);
+    Duration interval = const Duration(hours: 1);
 
     DateTime endOfDay =
         DateTime(current.year, current.month, current.day, 23, 59, 59);
@@ -306,6 +315,7 @@ class TaskManager {
         urgency: task.urgency,
         complexity: task.complexity,
         taskType: task.taskType,
+        assignedTo: task.assignedTo, // Include assignedTo field
       ));
 
       if (withinTaskPreference) {
@@ -360,8 +370,8 @@ class TaskManager {
 
         // If the adjusted start time is before now, move it to the next day
         if (adjustedStartTime.isBefore(now)) {
-          adjustedStartTime = adjustedStartTime.add(Duration(days: 1));
-          adjustedEndTime = adjustedEndTime.add(Duration(days: 1));
+          adjustedStartTime = adjustedStartTime.add(const Duration(days: 1));
+          adjustedEndTime = adjustedEndTime.add(const Duration(days: 1));
         }
 
         newTask.dueDate = adjustedDueDate;

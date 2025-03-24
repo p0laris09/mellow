@@ -439,6 +439,10 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
         const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            Text('Very Low',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
             Text('Low',
                 style: TextStyle(
                     fontSize: 12,
@@ -451,18 +455,17 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
                 style: TextStyle(
                     fontSize: 12,
                     color: Colors.black)), // Set text color to black
+            Text('Very High',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black)), // Set text color to black
           ],
         ),
         Slider(
           value: value,
           min: 1, // Start at 1
-          max: 3, // End at 3
-          divisions: 2, // Only 3 values: 1, 2, 3
-          label: value == 1
-              ? 'Low'
-              : value == 2
-                  ? 'Medium'
-                  : 'High',
+          max: 5, // End at 5
+          divisions: 4, // Only 5 values: 1, 2, 3, 4, 5
           onChanged: onChanged,
           activeColor: const Color(0xFF2275AA), // Set active color to blue
           inactiveColor:

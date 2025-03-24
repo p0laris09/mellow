@@ -204,17 +204,22 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
     final spaceName = _spaceNameController.text.trim();
     final description = _descriptionController.text.trim();
 
-    if (spaceName.isEmpty) {
-      // Show error for empty space name
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Space name cannot be empty')),
-      );
+    if (spaceName.isEmpty || description.isEmpty || selectedMembers.isEmpty) {
+      _showAlertDialog('Please fill in all fields');
       return;
     }
 
+    if (selectedMembers.isEmpty) {
+      _showAlertDialog('Please add at least one member');
+      return;
+    }
+
+    String spaceType = selectedMembers.length == 1 ? 'duo' : 'collaboration';
+
     try {
       // Add the space to Firestore
-      await FirebaseFirestore.instance.collection('spaces').add({
+      DocumentReference spaceRef =
+          await FirebaseFirestore.instance.collection('spaces').add({
         'name': spaceName,
         'description': description,
         'createdBy': uid,
@@ -223,12 +228,29 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
           uid, // Include the creator's UID
           ...selectedMembers, // Include the selected members' UIDs
         ],
+        'spaceType': spaceType, // Add the space type
         'createdAt':
             FieldValue.serverTimestamp(), // server timestamp for consistency
         'dateCreated': DateTime.now(), // adds precise local date and time
         'lastOpened':
             FieldValue.serverTimestamp(), // Add the timestamp of creation
       });
+
+      // Create notifications for each member
+      List<String> allMembers = [uid, ...selectedMembers];
+      for (String memberUid in allMembers) {
+        String message = memberUid == uid
+            ? 'You\'ve created a space!'
+            : 'You\'ve been added to a space!';
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'title': 'Space Notification',
+          'message': message,
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': 'space',
+          'receiverId': memberUid,
+          'spaceId': spaceRef.id,
+        });
+      }
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -242,6 +264,29 @@ class _CreateSpacePageState extends State<CreateSpacePage> {
         SnackBar(content: Text('Failed to create space: $e')),
       );
     }
+  }
+
+  void _showAlertDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2275AA),
+          title:
+              const Text("Empty Fields", style: TextStyle(color: Colors.white)),
+          content:
+              Text(errorMessage, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("OK", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
