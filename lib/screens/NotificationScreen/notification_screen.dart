@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/friend_request.dart';
 import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/add_friend.dart';
 import 'package:mellow/screens/ProfileScreen/ViewProfile/view_profile.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -37,17 +37,24 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .where('type', isEqualTo: 'task')
           .where('receiverId', isEqualTo: currentUserId)
           .get();
-      tasksNotifications = tasksSnapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                'title': doc['title'],
-                'message': doc['message'],
-                'timestamp': doc['timestamp'],
-                'type': doc['type'],
-                'receiverId': doc['receiverId'],
-              })
-          .toList();
-      print('Tasks Notifications: $tasksNotifications');
+      tasksNotifications = tasksSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        _sendPushNotification(
+          title: data['title'] ?? 'Task Notification', // Default title
+          body: data['message'] ??
+              'You have a new task notification.', // Default message
+        );
+        return {
+          'id': doc.id,
+          'title': data['title'] ?? 'Task Notification', // Default title
+          'message':
+              data['message'] ?? 'No details provided', // Default message
+          'timestamp':
+              data['timestamp'] ?? Timestamp.now(), // Default timestamp
+          'type': data['type'] ?? 'task', // Default type
+          'receiverId': data['receiverId'] ?? '', // Default receiverId
+        };
+      }).toList();
 
       // Fetch space notifications
       QuerySnapshot spaceSnapshot = await FirebaseFirestore.instance
@@ -55,17 +62,24 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .where('type', isEqualTo: 'space')
           .where('receiverId', isEqualTo: currentUserId)
           .get();
-      spaceNotifications = spaceSnapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                'title': doc['title'],
-                'message': doc['message'],
-                'timestamp': doc['timestamp'],
-                'type': doc['type'],
-                'receiverId': doc['receiverId'],
-              })
-          .toList();
-      print('Space Notifications: $spaceNotifications');
+      spaceNotifications = spaceSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        _sendPushNotification(
+          title: data['title'] ?? 'Space Notification', // Default title
+          body: data['message'] ??
+              'You have a new space notification.', // Default message
+        );
+        return {
+          'id': doc.id,
+          'title': data['title'] ?? 'Space Notification', // Default title
+          'message':
+              data['message'] ?? 'No details provided', // Default message
+          'timestamp':
+              data['timestamp'] ?? Timestamp.now(), // Default timestamp
+          'type': data['type'] ?? 'space', // Default type
+          'receiverId': data['receiverId'] ?? '', // Default receiverId
+        };
+      }).toList();
 
       // Fetch friend requests
       QuerySnapshot friendRequestsSnapshot = await FirebaseFirestore.instance
@@ -73,90 +87,56 @@ class _NotificationScreenState extends State<NotificationScreen> {
           .where('type', isEqualTo: 'friend request')
           .where('receiverId', isEqualTo: currentUserId)
           .get();
-      friendRequests = await Future.wait(friendRequestsSnapshot.docs
-          .map((doc) async {
-            String fromUserId = (doc.data() != null &&
-                    (doc.data() as Map<String, dynamic>)
-                        .containsKey('fromUserId'))
-                ? doc['fromUserId']
-                : '';
-            String profileImageUrl = '';
-            if (fromUserId.isNotEmpty) {
-              DocumentSnapshot userDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(fromUserId)
-                  .get();
-              if (userDoc.exists) {
-                final data = userDoc.data() as Map<String, dynamic>;
-                profileImageUrl = data['profileImageUrl'] ?? '';
-                if (profileImageUrl.isEmpty) {
-                  try {
-                    final defaultImageRef = FirebaseStorage.instance
-                        .ref()
-                        .child('default_images/default_profile.png');
-                    profileImageUrl = await defaultImageRef.getDownloadURL();
-                  } catch (e) {
-                    profileImageUrl = 'assets/img/default_profile.png';
-                  }
-                }
-              }
+
+      final friendRequestsFutures =
+          friendRequestsSnapshot.docs.map((doc) async {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        String fromUserId = data['fromUserId'] ?? '';
+        String formattedName = fromUserId;
+
+        if (fromUserId.isNotEmpty) {
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(fromUserId)
+              .get();
+          if (userDoc.exists) {
+            final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+            String firstName = userData['firstName'] ?? '';
+            String middleName = userData['middleName'] ?? '';
+            String lastName = userData['lastName'] ?? '';
+
+            formattedName = '$fromUserId($firstName';
+            if (middleName.isNotEmpty) {
+              formattedName += ' ${middleName[0]}.'; // Add middle initial
             }
-
-            // Check if already friends
-            bool isFriend = await _checkIfAlreadyFriends(fromUserId);
-
-            if (isFriend) {
-              // If already friends, remove the notification
-              await FirebaseFirestore.instance
-                  .collection('notifications')
-                  .doc(doc.id)
-                  .delete();
-              return null;
-            } else {
-              return {
-                'id': doc.id,
-                'fromUserId': fromUserId,
-                'status': doc['status'],
-                'title': doc['title'],
-                'message': doc['message'],
-                'timestamp': doc['timestamp'],
-                'type': doc['type'],
-                'receiverId': doc['receiverId'],
-                'profileImageUrl': profileImageUrl,
-              };
-            }
-          })
-          .where((future) => future != null)
-          .toList() as List<Future<Map<String, dynamic>>>);
-
-      // Remove null entries from friendRequests
-      friendRequests.removeWhere((request) => request == null);
-
-      print('Friend Requests: $friendRequests');
-
-      // Fetch tasks to check for overdue tasks
-      QuerySnapshot tasksQuerySnapshot = await FirebaseFirestore.instance
-          .collection('tasks')
-          .where('userId', isEqualTo: currentUserId)
-          .get();
-
-      for (var doc in tasksQuerySnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        DateTime dueDate = (data['dueDate'] as Timestamp).toDate();
-        String status = data['status'];
-
-        if (dueDate.isBefore(DateTime.now()) && status != 'Finished') {
-          // Add overdue task notification
-          tasksNotifications.add({
-            'id': doc.id,
-            'title': 'Overdue Task',
-            'message': 'Your task "${data['taskName']}" is overdue.',
-            'timestamp': Timestamp.now(),
-            'type': 'task',
-            'receiverId': currentUserId,
-          });
+            formattedName += ' $lastName)';
+          }
         }
-      }
+
+        _sendPushNotification(
+          title: 'Friend Request',
+          body: '$formattedName sent you a friend request!',
+        );
+
+        return {
+          'id': doc.id,
+          'fromUserId': fromUserId,
+          'formattedName': formattedName,
+          'status': data['status'] ?? 'pending', // Default status
+          'title': data['title'] ?? 'Friend Request', // Default title
+          'message':
+              data['message'] ?? 'No details provided', // Default message
+          'timestamp':
+              data['timestamp'] ?? Timestamp.now(), // Default timestamp
+          'type': data['type'] ?? 'friend request', // Default type
+          'receiverId': data['receiverId'] ?? '', // Default receiverId
+        };
+      }).toList();
+
+      friendRequests = (await Future.wait(friendRequestsFutures))
+          .where((request) => request != null)
+          .cast<Map<String, dynamic>>()
+          .toList();
 
       _filterNotifications();
 
@@ -168,6 +148,27 @@ class _NotificationScreenState extends State<NotificationScreen> {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _sendPushNotification({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      String? token = await messaging.getToken();
+
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('push_notifications').add({
+          'token': token,
+          'title': 1,
+          'body': body,
+          'timestamp': Timestamp.now(),
+        });
+      }
+    } catch (e) {
+      print('Error sending push notification: $e');
     }
   }
 
@@ -431,7 +432,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       _navigateToProfileDetail(notification['fromUserId']),
                   child: CircleAvatar(
                     radius: 35, // Bigger avatar
-                    backgroundImage: notification['profileImageUrl'].isNotEmpty
+                    backgroundImage: (notification['profileImageUrl'] != null &&
+                            notification['profileImageUrl'].isNotEmpty)
                         ? NetworkImage(notification['profileImageUrl'])
                         : const AssetImage('assets/img/default_profile.png')
                             as ImageProvider,
@@ -449,7 +451,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${notification['fromUserId']} sent you a friend request!',
+                        '${notification['formattedName']} sent you a friend request!',
                         style:
                             const TextStyle(color: Colors.grey, fontSize: 14),
                         overflow: TextOverflow.ellipsis,

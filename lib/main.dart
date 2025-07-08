@@ -14,7 +14,6 @@ import 'package:mellow/auth/signup/sign_up_personal_details.dart';
 import 'package:mellow/provider/BannerImageProvider/banner_image_provider.dart';
 import 'package:mellow/provider/ProfileImageProvider/profile_image_provider.dart';
 import 'package:mellow/screens/DashboardScreen/dashboard_screen.dart';
-import 'package:mellow/screens/MessageScreen/message_screen.dart';
 import 'package:mellow/screens/NotificationScreen/notification_screen.dart';
 import 'package:mellow/screens/Policies/DataPrivacyAct/data_privacy_screen.dart';
 import 'package:mellow/screens/ProfileScreen/SearchFriendsScreen/search_friends.dart';
@@ -33,11 +32,19 @@ import 'package:mellow/screens/TaskCreation/task_creation_space.dart';
 import 'package:mellow/screens/TaskManagement/TaskHistory/task_history.dart';
 import 'package:mellow/screens/TaskManagement/task_management.dart';
 import 'package:provider/provider.dart';
-import 'package:workmanager/workmanager.dart';
+// import 'package:workmanager/workmanager.dart';
 import 'firebase_options.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
+
+// Add this function to handle background messages
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(); // Ensure Firebase is initialized
+  print('Handling a background message: ${message.messageId}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,11 +52,23 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // Register the background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Initialize Firebase App Check
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug, // Change this in production
+    appleProvider: AppleProvider.appAttest, // Use DeviceCheck if needed
+  );
+
   // Initialize Workmanager for periodic task checks
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  // Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
 
   // Initialize notifications
   await _initializeNotifications();
+
+  // Initialize Firebase Messaging
+  await _initializeFirebaseMessaging();
 
   runApp(
     MultiProvider(
@@ -78,11 +97,90 @@ Future<void> _initializeNotifications() async {
   );
 }
 
+// Initialize Firebase Messaging
+Future<void> _initializeFirebaseMessaging() async {
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+  // Request notification permissions for iOS
+  NotificationSettings settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+    print('User granted permission');
+  } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+    print('User granted provisional permission');
+  } else {
+    print('User declined or has not accepted permission');
+  }
+
+  // Get the FCM token for the device
+  try {
+    String? token = await messaging.getToken();
+    if (token != null) {
+      debugPrint('FCM Token: $token'); // Use debugPrint for logging
+    } else {
+      debugPrint('Failed to retrieve FCM Token');
+    }
+  } catch (e) {
+    debugPrint('Error retrieving FCM Token: $e');
+  }
+
+  // Handle foreground messages
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('Received a foreground message: ${message.notification?.title}');
+    _showForegroundNotification(message);
+  });
+
+  // Handle background messages
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    print('Notification opened: ${message.notification?.title}');
+    _handleNotificationTap(message);
+  });
+
+  // Handle terminated state messages
+  RemoteMessage? initialMessage = await messaging.getInitialMessage();
+  if (initialMessage != null) {
+    _handleNotificationTap(initialMessage);
+  }
+}
+
+// Show a notification when the app is in the foreground
+Future<void> _showForegroundNotification(RemoteMessage message) async {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'channel_id',
+    'channel_name',
+    channelDescription: 'channel_description',
+    importance: Importance.max,
+    priority: Priority.high,
+  );
+
+  const NotificationDetails platformDetails =
+      NotificationDetails(android: androidDetails);
+
+  await flutterLocalNotificationsPlugin.show(
+    message.notification.hashCode,
+    message.notification?.title,
+    message.notification?.body,
+    platformDetails,
+    payload: message.data['payload'], // Pass any custom payload
+  );
+}
+
+// Handle notification tap
+void _handleNotificationTap(RemoteMessage message) {
+  final String? payload = message.data['payload'];
+  if (payload != null) {
+    navigatorKey.currentState?.pushNamed('/task_details', arguments: payload);
+  }
+}
+
 // Handle notification tapped logic
 void _onDidReceiveNotificationResponse(NotificationResponse response) {
   final String? payload = response.payload;
   if (payload != null) {
-    // Navigate to the task details page with the task name as payload
     navigatorKey.currentState?.pushNamed('/task_details', arguments: payload);
   }
 }
@@ -96,12 +194,12 @@ Future<void> _onSelectNotification(String? payload) async {
   }
 }
 
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) {
-    print("Background task executed: $task");
-    return Future.value(true);
-  });
-}
+// void callbackDispatcher() {
+//   Workmanager().executeTask((task, inputData) {
+//     print("Background task executed: $task");
+//     return Future.value(true);
+//   });
+// }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -155,7 +253,6 @@ class MellowApp extends StatelessWidget {
         '/change_email': (context) => const EmailUpdatePage(),
         '/change_password': (context) => const ChangePassword(),
         '/search_friends': (context) => const SearchFriends(),
-        '/messages': (context) => const MessageScreen(),
         '/sendfeedback': (context) => const SendfeedbackScreen(),
         '/reportbugs': (context) => const ReportBugsScreen(),
         '/taskhistory': (context) => const TaskListScreen(),

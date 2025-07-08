@@ -267,17 +267,34 @@ class _FriendRequestState extends State<FriendRequest> {
 
   Future<void> _sendNotification(
       String receiverId, String title, String message) async {
-    await FirebaseFirestore.instance.collection('notifications').add({
-      'type': 'friend_request',
-      'senderId': currentUserId,
-      'receiverId': receiverId,
-      'title': title,
-      'message': message,
-      'timestamp': FieldValue.serverTimestamp(),
-      'status': title == 'Friend Request Accepted'
-          ? 'Now Friends'
-          : 'Request Declined',
-    });
+    try {
+      // Fetch the current user's name
+      DocumentSnapshot currentUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      String senderName = 'Unknown User';
+      if (currentUserDoc.exists) {
+        final data = currentUserDoc.data() as Map<String, dynamic>;
+        senderName = '${data['firstName']} ${data['lastName']}';
+      }
+
+      // Send the notification
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'type': 'friend_request',
+        'senderId': currentUserId,
+        'receiverId': receiverId,
+        'title': title,
+        'message': '$senderName $message', // Include the sender's name
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': title == 'Friend Request Accepted'
+            ? 'Now Friends'
+            : 'Request Declined',
+      });
+    } catch (e) {
+      print('Error sending notification: $e');
+    }
   }
 
   @override

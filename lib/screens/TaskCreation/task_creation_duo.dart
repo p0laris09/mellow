@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,20 +27,31 @@ class TaskManager {
 
       tasks = querySnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Safely handle missing fields with default values
         TaskDuo task = TaskDuo(
-          userId: data['userId'],
-          taskName: data['taskName'],
-          dueDate: (data['dueDate'] as Timestamp).toDate(),
-          startTime: (data['startTime'] as Timestamp).toDate(),
-          endTime: (data['endTime'] as Timestamp).toDate(),
-          description: data['description'] ?? '',
-          priority: (data['priority'] as num).toDouble(),
-          urgency: (data['urgency'] as num).toDouble(),
-          complexity: (data['complexity'] as num).toDouble(),
-          taskType: data['taskType'],
-          assignedTo: data['assignedTo'],
-          createdBy: data['createdBy'],
+          userId: data['userId'] ?? '', // Default to an empty string
+          taskName:
+              data['taskName'] ?? 'Unnamed Task', // Default to 'Unnamed Task'
+          dueDate: (data['dueDate'] as Timestamp?)?.toDate() ??
+              DateTime.now(), // Default to now
+          startTime: (data['startTime'] as Timestamp?)?.toDate() ??
+              DateTime.now(), // Default to now
+          endTime: (data['endTime'] as Timestamp?)?.toDate() ??
+              DateTime.now()
+                  .add(const Duration(hours: 1)), // Default to 1 hour from now
+          description: data['description'] ?? '', // Default to an empty string
+          priority:
+              (data['priority'] as num?)?.toDouble() ?? 1.0, // Default to 1.0
+          urgency:
+              (data['urgency'] as num?)?.toDouble() ?? 1.0, // Default to 1.0
+          complexity:
+              (data['complexity'] as num?)?.toDouble() ?? 1.0, // Default to 1.0
+          taskType: data['taskType'] ?? 'duo', // Default to 'general'
+          assignedTo: data['assignedTo'] ?? '', // Default to an empty string
+          createdBy: data['createdBy'] ?? '', // Default to an empty string
         );
+
         task.updateWeight(criteriaWeights); // Pass criteriaWeights
         return task;
       }).toList();
@@ -229,8 +241,12 @@ class TaskManager {
     }
   }
 
-  Future<void> showConflictDialog(TaskDuo conflictingTask, BuildContext context,
-      Function(TaskDuo) onTaskResolved, String assignedTo) async {
+  Future<void> showConflictDialog(
+    TaskDuo conflictingTask,
+    BuildContext context,
+    Function(TaskDuo) onTaskResolved,
+    String assignedTo,
+  ) async {
     List<DateTime> bestTimes =
         await suggestBestTimes(conflictingTask, assignedTo);
     final duration =
@@ -238,7 +254,10 @@ class TaskManager {
 
     if (bestTimes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No available time slots found.')),
+        const SnackBar(
+          content: Text('No available time slots found.'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -246,49 +265,97 @@ class TaskManager {
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            'Task Conflict Detected',
-            style: TextStyle(
-              color: Color(0xFF2275AA),
-              fontWeight: FontWeight.bold,
-            ),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule.',
-                style: const TextStyle(color: Colors.black),
-              ),
-              const SizedBox(height: 16),
-              for (var i = 0; i < bestTimes.length; i++)
-                _buildTimeCard(
-                  context: context,
-                  time: bestTimes[i],
-                  label: i == 0 ? "Suggested Best Time" : "Second Best Time",
-                  onSelect: () {
-                    // Update task's start and end time here
-                    conflictingTask.startTime = bestTimes[i];
-                    conflictingTask.endTime = bestTimes[i].add(duration);
-                    onTaskResolved(
-                        conflictingTask); // Resolve with updated task
-                    Navigator.pop(context); // Close dialog
-                  },
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title
+                const Text(
+                  'Task Conflict Detected',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2275AA),
+                  ),
                 ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-              },
-              child: const Text(
-                'Change Time Manually',
-                style: TextStyle(color: Color(0xFF2275AA)),
-              ),
+                const SizedBox(height: 12),
+                // Conflict Message
+                Text(
+                  'The task "${conflictingTask.taskName}" conflicts with other tasks in your schedule. Please select a new time:',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Suggested Times
+                for (var i = 0; i < bestTimes.length; i++)
+                  _buildTimeCard(
+                    context: context,
+                    startTime: bestTimes[i],
+                    endTime: bestTimes[i].add(duration),
+                    label: i == 0
+                        ? "Suggested Best Time"
+                        : "Alternative Time ${i + 1}",
+                    onSelect: () {
+                      conflictingTask.startTime = bestTimes[i];
+                      conflictingTask.endTime = bestTimes[i].add(duration);
+                      onTaskResolved(conflictingTask);
+                      Navigator.pop(context);
+                    },
+                  ),
+                const SizedBox(height: 16),
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF2275AA)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF2275AA),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2275AA),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Change Manually',
+                          style: TextStyle(fontSize: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -296,20 +363,23 @@ class TaskManager {
 
   Widget _buildTimeCard({
     required BuildContext context,
-    required DateTime time,
+    required DateTime startTime,
+    required DateTime endTime,
     required String label,
     required VoidCallback onSelect,
   }) {
     return Card(
       elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Label
             Text(
               label,
               style: const TextStyle(
@@ -318,20 +388,48 @@ class TaskManager {
                 color: Color(0xFF2275AA),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              DateFormat('yyyy-MM-dd HH:mm').format(time),
-              style: const TextStyle(fontSize: 14, color: Colors.black),
+            const SizedBox(height: 6),
+            // Start Time
+            Row(
+              children: [
+                const Icon(Icons.access_time_filled,
+                    size: 20, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  'Start: ${DateFormat('EEE, MMM d, hh:mm a').format(startTime)}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // End Time
+            Row(
+              children: [
+                const Icon(Icons.access_time_filled,
+                    size: 20, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  'End: ${DateFormat('EEE, MMM d, hh:mm a').format(endTime)}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            Center(
+            // Choose Time Button
+            Align(
+              alignment: Alignment.centerRight,
               child: ElevatedButton(
                 onPressed: onSelect,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: const Color(0xFF2275AA),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Text('Choose This Time'),
+                child: const Text('Choose'),
               ),
             ),
           ],
@@ -354,6 +452,9 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
   final List<String> _DuoSpace = [];
   final List<String> _member = [];
   Map<String, String> _memberMap = {}; // Define the _memberMap variable
+  Map<String, String> _spaceIdMap = {}; // Maps spaceId to spaceName
+
+  List<PlatformFile> _selectedFiles = []; // List to store selected files
 
   @override
   void initState() {
@@ -383,11 +484,16 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
           .where('spaceType', isEqualTo: 'duo')
           .get();
 
-      List<String> duoSpaces =
-          duoSpacesSnapshot.docs.map((doc) => doc['name'] as String).toList();
+      Map<String, String> duoSpaces = {
+        for (var doc in duoSpacesSnapshot.docs)
+          doc.id: doc['name'] as String, // Map spaceId to space name
+      };
 
       setState(() {
-        _DuoSpace.addAll(duoSpaces);
+        _DuoSpace.clear();
+        _DuoSpace.addAll(
+            duoSpaces.entries.map((entry) => entry.value).toList());
+        _spaceIdMap = duoSpaces; // Store the spaceId-to-name mapping
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -509,6 +615,104 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
     }
   }
 
+  Future<void> _pickFiles() async {
+    try {
+      // Ensure FilePicker is properly initialized
+      if (FilePicker.platform == null) {
+        throw Exception('FilePicker platform is not initialized.');
+      }
+
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true, // Allow multiple file selection
+        type: FileType.custom, // Restrict file types
+        allowedExtensions: [
+          'txt',
+          'pdf',
+          'doc',
+          'docx',
+          'jpeg',
+          'jpg',
+          'png'
+        ], // Allowed file types
+      );
+
+      if (result != null) {
+        // Check file size limit (150MB)
+        List<PlatformFile> validFiles = result.files.where((file) {
+          return file.size <= 150 * 1024 * 1024; // 150MB in bytes
+        }).toList();
+
+        if (validFiles.length != result.files.length) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Some files were not added because they exceed the 150MB limit.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+
+        setState(() {
+          _selectedFiles.addAll(validFiles); // Add valid files to the list
+        });
+
+        // Show an indicator that files have been added
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${validFiles.length} file(s) added successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error picking files: $e'); // Log the error to the debug console
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking files: $e')),
+      );
+    }
+  }
+
+  Widget _buildFileUploadNote() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD), // Light blue background
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2275AA), width: 1.5),
+        ),
+        padding: const EdgeInsets.all(16.0),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Color(0xFF2275AA),
+              size: 24,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'You can upload files with the following extensions: txt, pdf, doc, docx, jpeg, jpg, png. Maximum file size is 150MB.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF2275AA),
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.left,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removeFile(int index) {
+    setState(() {
+      _selectedFiles.removeAt(index);
+    });
+  }
+
   Future<void> _createTaskInFirestore() async {
     String taskName = _taskNameController.text.trim();
     String? createdBy = FirebaseAuth.instance.currentUser?.uid;
@@ -531,6 +735,12 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
       return;
     }
 
+    // Ensure a task name is provided
+    if (taskName.isEmpty) {
+      _showAlertDialog('Please provide a task name before proceeding.');
+      return;
+    }
+
     TaskManager taskManager = TaskManager();
     Map<String, double> criteriaWeights = {
       'priority': _priority,
@@ -547,12 +757,13 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
     if (taskManager.tasks.isEmpty) {
       print("No tasks found for selected member");
     } else {
-      // Find existing task assigned to the selected user
+      // Find existing task assigned to the selected user with the same task name
       TaskDuo? existingTask;
       for (var task in taskManager.tasks) {
         print(
             "Checking task: ${task.taskName}, assignedTo: ${task.assignedTo}");
-        if (task.assignedTo == selectedMemberUid) {
+        if (task.assignedTo == selectedMemberUid &&
+            task.taskName.toLowerCase() == taskName.toLowerCase()) {
           existingTask = task;
           break;
         }
@@ -657,28 +868,110 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
   }
 
   Future<void> _addTaskToFirestore(TaskDuo task, String createdBy) async {
-    await FirebaseFirestore.instance.collection('tasks').add({
-      'taskName': task.taskName,
-      'dueDate': Timestamp.fromDate(task.dueDate),
-      'startTime': Timestamp.fromDate(task.startTime),
-      'endTime': Timestamp.fromDate(task.endTime),
-      'description': task.description,
-      'priority': task.priority,
-      'urgency': task.urgency,
-      'complexity': task.complexity,
-      'weight': task.weight,
-      'createdAt': Timestamp.now(),
-      'userId': task.userId,
-      'status': 'pending',
-      'taskType': task.taskType,
-      'assignedTo': task.assignedTo,
-      'createdBy': createdBy,
-    });
+    try {
+      // Add the task to the Firestore 'tasks' collection
+      DocumentReference taskRef =
+          await FirebaseFirestore.instance.collection('tasks').add({
+        'taskName': task.taskName,
+        'dueDate': Timestamp.fromDate(task.dueDate),
+        'startTime': Timestamp.fromDate(task.startTime),
+        'endTime': Timestamp.fromDate(task.endTime),
+        'description': task.description,
+        'priority': task.priority,
+        'urgency': task.urgency,
+        'complexity': task.complexity,
+        'weight': task.weight,
+        'createdAt': Timestamp.now(),
+        'userId': task.userId,
+        'status': 'pending',
+        'taskType': task.taskType,
+        'assignedTo': task.assignedTo,
+        'createdBy': createdBy,
+        'spaceId': _selectedDuoSpace, // Save the spaceId (document ID)
+      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task created successfully')),
-    );
-    Navigator.pop(context);
+      // Fetch user details for notifications and activities
+      DocumentSnapshot createdByUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(createdBy)
+          .get();
+      String createdByName =
+          '${createdByUserDoc['firstName']} ${createdByUserDoc['lastName']}';
+
+      DocumentSnapshot? assignedToUserDoc;
+      String? assignedToName;
+      if (task.assignedTo != createdBy) {
+        assignedToUserDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(task.assignedTo)
+            .get();
+        assignedToName =
+            '${assignedToUserDoc['firstName']} ${assignedToUserDoc['lastName']}';
+      }
+
+      // Add a notification
+      if (task.assignedTo == createdBy) {
+        // Notification for the creator (self-assigned task)
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': createdBy,
+          'receiverId': createdBy, // Receiver is the creator
+          'message':
+              '$createdByName created a task in duo space $_selectedDuoSpace',
+          'timestamp': Timestamp.now(),
+          'taskId': taskRef.id,
+          'type': 'space', // Added type field
+          'title': 'space', // Added title field
+        });
+      } else {
+        // Notification for the assigned user
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': task.assignedTo,
+          'receiverId': task.assignedTo, // Receiver is the assigned user
+          'message': '$createdByName created a task for you!',
+          'timestamp': Timestamp.now(),
+          'taskId': taskRef.id,
+          'type': 'space', // Added type field
+          'title': 'space', // Added title field
+        });
+      }
+
+      // Add an activity
+      if (task.assignedTo == createdBy) {
+        // Activity for self-assigned task
+        await FirebaseFirestore.instance.collection('activities').add({
+          'timestamp': FieldValue.serverTimestamp(),
+          'createdBy': createdBy,
+          'assignedTo': task.assignedTo,
+          'taskName': task.taskName,
+          'message': '$createdByName created a task for themselves',
+          'spaceId': _selectedDuoSpace, // Include the spaceUid
+          'taskId': taskRef.id,
+          'type': 'task_created', // Added type field
+        });
+      } else {
+        // Activity for assigned task
+        await FirebaseFirestore.instance.collection('activities').add({
+          'createdBy': createdBy,
+          'assignedTo': task.assignedTo,
+          'message': '$createdByName created a task for $assignedToName',
+          'timestamp': Timestamp.now(),
+          'spaceId': _selectedDuoSpace, // Include the spaceUid
+          'taskId': taskRef.id,
+          'type': 'task_created', // Added type field
+        });
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task created successfully')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      // Handle errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating task: $e')),
+      );
+    }
   }
 
   @override
@@ -756,16 +1049,15 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                               ),
                               border: UnderlineInputBorder(),
                             ),
-                            items: _DuoSpace.map((String duoSpace) {
+                            items: _spaceIdMap.entries.map((entry) {
                               return DropdownMenuItem<String>(
-                                value: duoSpace,
+                                value: entry.key, // Use spaceId as the value
                                 child: ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 250),
                                   child: Text(
-                                    duoSpace,
-                                    overflow: TextOverflow.visible,
-                                    maxLines: null,
+                                    entry.value, // Display the space name
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(color: Colors.white),
                                   ),
                                 ),
@@ -773,21 +1065,22 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                             }).toList(),
                             onChanged: (String? newValue) {
                               setState(() {
-                                _selectedDuoSpace = newValue;
+                                _selectedDuoSpace =
+                                    newValue; // Store the selected spaceId
                                 _selectedMember = null; // Reset selected member
                                 if (newValue != null) {
-                                  _fetchMembersOfSelectedSpace(
-                                      newValue); // Fetch members of the selected space
+                                  _fetchMembersOfSelectedSpace(_spaceIdMap[
+                                      newValue]!); // Fetch members of the selected space
                                 }
                               });
                             },
                             selectedItemBuilder: (BuildContext context) {
-                              return _DuoSpace.map((String duoSpace) {
+                              return _spaceIdMap.entries.map((entry) {
                                 return ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 250),
                                   child: Text(
-                                    duoSpace,
+                                    entry.value, // Display the space name
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(color: Colors.white),
                                   ),
@@ -1008,6 +1301,37 @@ class _TaskCreationDuoState extends State<TaskCreationDuo> {
                       _complexity = value;
                     });
                   }),
+                  const SizedBox(height: 45),
+                  _buildFileUploadNote(),
+                  ElevatedButton(
+                    onPressed: _pickFiles,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 50, vertical: 20),
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF2275AA),
+                    ),
+                    child: const Text('Attach Files'),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_selectedFiles.isNotEmpty)
+                    Column(
+                      children: _selectedFiles.asMap().entries.map((entry) {
+                        int index = entry.key;
+                        PlatformFile file = entry.value;
+                        return ListTile(
+                          leading: const Icon(Icons.insert_drive_file,
+                              color: Colors.blue),
+                          title: Text(file.name),
+                          subtitle: Text(
+                              '${(file.size / (1024 * 1024)).toStringAsFixed(2)} MB'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _removeFile(index),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   const SizedBox(height: 45),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

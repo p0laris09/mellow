@@ -19,17 +19,15 @@ class SpaceCard extends StatelessWidget {
   // Method to update the lastOpened field in Firestore
   Future<void> updateLastOpened(String spaceId) async {
     try {
-      // Get current time and day
+      // Get the current time
       DateTime now = DateTime.now();
-      String formattedDate =
-          "${now.year}-${now.month}-${now.day} ${now.hour}:${now.minute}:${now.second}"; // Example: 2024-11-21 14:30:00
 
-      // Update Firestore document with the current time in the lastOpened field
+      // Update Firestore document with the current time as a Timestamp
       await FirebaseFirestore.instance
           .collection('spaces')
           .doc(spaceId)
           .update({
-        'lastOpened': formattedDate,
+        'lastOpened': Timestamp.fromDate(now), // Store as Firestore Timestamp
       });
     } catch (e) {
       print("Error updating lastOpened field: $e");
@@ -88,6 +86,9 @@ class SpaceCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     description,
+                    maxLines: 1, // Ensures only one line is displayed
+                    overflow:
+                        TextOverflow.ellipsis, // Adds "..." if text overflows
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,

@@ -20,11 +20,6 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
   final TextEditingController _birthdayController = TextEditingController();
 
   DateTime? _selectedDate;
-  String? _selectedGender;
-  final List<String> _gender = [
-    'Male',
-    'Female',
-  ];
 
   Future<void> _selectDate(BuildContext context) async {
     DateTime now = DateTime.now();
@@ -80,8 +75,7 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
     // Check if required fields are empty
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
-        _birthdayController.text.isEmpty ||
-        _selectedGender == null) {
+        _birthdayController.text.isEmpty) {
       _showErrorDialog('Please fill in all required fields!');
       return;
     }
@@ -111,7 +105,6 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
           middleName: _middleNameController.text,
           lastName: _lastNameController.text,
           birthday: _birthdayController.text,
-          gender: _selectedGender!,
         ),
       ),
     );
@@ -299,40 +292,6 @@ class _SignUpPersonalDetailsState extends State<SignUpPersonalDetails> {
                           ),
                           hintText: 'mm/dd/yyyy',
                         ),
-                      ),
-                    ),
-
-                    // Dropdown for Year
-                    SizedBox(
-                      width: 300,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedGender,
-                        decoration: const InputDecoration(
-                          labelText: "Gender",
-                          labelStyle: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          border: UnderlineInputBorder(),
-                        ),
-                        items: _gender.map((String year) {
-                          return DropdownMenuItem<String>(
-                            value: year,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 250),
-                              child: Text(
-                                year,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedGender = newValue;
-                          });
-                        },
-                        menuMaxHeight: 300,
                       ),
                     ),
                     const SizedBox(height: 50),

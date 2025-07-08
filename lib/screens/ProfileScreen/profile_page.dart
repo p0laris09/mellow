@@ -128,15 +128,17 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
 
-    setState(() {
-      overdueCount = overdueTasks;
-      pendingCount = pendingTasks;
-      ongoingCount = ongoingTasks;
-      finishedCount = finishedTasks;
+    if (mounted) {
+      setState(() {
+        overdueCount = overdueTasks;
+        pendingCount = pendingTasks;
+        ongoingCount = ongoingTasks;
+        finishedCount = finishedTasks;
 
-      // Update total task count
-      tasksCount = uniqueTasks.length;
-    });
+        // Update total task count
+        tasksCount = uniqueTasks.length;
+      });
+    }
 
     // Fetch spaces the user is in
     final spacesQuery = await firestore

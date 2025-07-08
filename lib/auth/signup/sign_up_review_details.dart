@@ -8,7 +8,6 @@ class AccountReviewScreen extends StatefulWidget {
   final String middleName;
   final String lastName;
   final String birthday;
-  final String gender;
   final String university;
   final String college;
   final String program;
@@ -24,7 +23,6 @@ class AccountReviewScreen extends StatefulWidget {
     required this.middleName,
     required this.lastName,
     required this.birthday,
-    required this.gender,
     required this.university,
     required this.college,
     required this.program,
@@ -64,7 +62,6 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
           'middleName': widget.middleName,
           'lastName': widget.lastName,
           'birthday': widget.birthday,
-          'gender': widget.gender,
           'university': widget.university,
           'college': widget.college,
           'program': widget.program,
@@ -190,7 +187,6 @@ class _AccountReviewScreenState extends State<AccountReviewScreen> {
                     _buildReviewRow("Middle Name:", widget.middleName),
                     _buildReviewRow("Last Name:", widget.lastName),
                     _buildReviewRow("Birthday:", widget.birthday),
-                    _buildReviewRow("Gender", widget.gender),
                     const SizedBox(height: 20),
                     const Text(
                       'School Information',

@@ -16,22 +16,33 @@ class MembersModel {
 
     if (uid == null) return members;
 
-    // Fetch friends data, excluding the current user from the results
+    // Fetch friends data from friends_db collection
     final friendsQuery = await FirebaseFirestore.instance
-        .collection('users')
+        .collection('friends_db')
         .doc(uid)
         .collection('friends')
         .get();
 
     if (friendsQuery.docs.isNotEmpty) {
-      members['friends'] =
-          friendsQuery.docs.where((doc) => doc.id != uid).map((doc) {
-        String fullName =
-            "${doc['firstName']} ${doc['middleName']?.isNotEmpty == true ? doc['middleName'][0] + '. ' : ''}${doc['lastName']}";
-        return {'uid': doc.id, 'name': fullName};
-      }).toList();
+      members['friends'] = await Future.wait(friendsQuery.docs.map((doc) async {
+        final friendId =
+            doc['friendId']; // Get the friend's ID from the friendId field
+        final friendDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(friendId)
+            .get();
+
+        if (friendDoc.exists) {
+          final friendData = friendDoc.data() as Map<String, dynamic>;
+          String fullName =
+              "${friendData['firstName']} ${friendData['middleName']?.isNotEmpty == true ? friendData['middleName'][0] + '. ' : ''}${friendData['lastName']}";
+          return {'uid': friendId, 'name': fullName};
+        }
+        return {'uid': friendId, 'name': 'Unknown User'};
+      }));
     }
 
+    // Fetch user data for suggested peers
     final userDoc =
         await FirebaseFirestore.instance.collection('users').doc(uid).get();
     final userData = userDoc.data();
@@ -202,18 +213,127 @@ class MembersModel {
   };
 
   final Map<String, int> programMapping = {
-    'Computer Science': 1,
-    'Information Technology': 2,
-    'Engineering': 3,
-    'Business': 4,
-    // Add more programs as needed
+    'Bachelor of Science in Office Administration': 1,
+    'Bachelor of Science in Entrepreneurial Management': 2,
+    'Bachelor of Science in Financial Management': 3,
+    'Bachelor of Science in Business Administration major in Marketing Management':
+        4,
+    'Bachelor of Science in Business Administration major in Human Resource Development Management':
+        5,
+    'Bachelor of Science in Business Administration major in Supply Management':
+        6,
+    'Bachelor of Science in Business Administration major in Building and Property Management':
+        7,
+    'Associate in Sales Management': 8,
+    'Associate in Office Management Technology': 9,
+    'Associate in Entrepreneurship': 10,
+    'Associate in Supply Management': 11,
+    'Associate in Building and Property Management': 12,
+    'Bachelor of Arts in Political Science Major in Local Government Administration':
+        13,
+    'Bachelor in Automotive Technology': 14,
+    'Bachelor in Industrial Facilities Technology Management': 15,
+    'Bachelor of Science in Business Administration Major in Human Resource Development Management':
+        16,
+    'Bachelor of Science in Entrepreneurship': 17,
+    'Certificate in Barangay Governance': 18,
+    'Certificate in Katarungang Pambarangay and Alternative Dispute Resolution':
+        19,
+    'Diploma in Development Management and Governance': 20,
+    'Master of Arts in Education (Admin & Supervision / Guidance and Counselling)':
+        21,
+    'Master of Arts in Innovative Education (various majors including Biology, Business Ed, etc.)':
+        22,
+    'Master of Arts in Special Education (Autism & Mental Retardism / Early Childhood Ed)':
+        23,
+    'Master of Arts in Nursing': 24,
+    'Master in Business Administration (Building Property Management / Entrepreneurship / Healthcare Mgmt)':
+        25,
+    'Master in Development Management and Governance': 26,
+    'Master in Public Administration (+ Major in Local Governance)': 27,
+    'Master of Science in Radiologic Technology': 28,
+    'Doctor of Education (Innovative Educational Mgmt)': 29,
+    'Doctor of Philosophy in Special Education': 30,
+    'Doctor of Philosophy in Leadership (Business, Education, Public Mgmt Tracks)':
+        31,
+    'Doctor of Public Administration': 32,
+    'Executive Doctorate in Leadership (Business, Education, Public Mgmt Tracks)':
+        33,
+    'Bachelor of Science in Information Technology (Information & Network Security)':
+        34,
+    'Bachelor of Science in Computer Science (Computational and Data Sciences)':
+        35,
+    'Bachelor of Science in Computer Science (Application Development)': 36,
+    'Diploma in Application Development': 37,
+    'Diploma in Computer Network Administration': 38,
+    'Bachelor of Science in Civil Engineering': 39,
+    'Bachelor of Science in Building Technology Management': 40,
+    'Bachelor of Science in Electrical Technology': 41,
+    'Bachelor of Science in Electronics and Telecommunication Technology': 42,
+    'Diploma in Electrical Technology': 43,
+    'Diploma in Industrial Facilities Technology': 44,
+    'Diploma in Industrial Facilities Technology Major in Service Mechanics':
+        45,
+    'Associate in Electronics Technology': 46,
+    'Certificate in Building Technology Management': 47,
+    'Bachelor of Arts in Political Science major in Paralegal Studies': 48,
+    'Bachelor of Arts in Political Science major in Policy Management': 49,
+    'Bachelor of Arts in Political Science major in Local Government Administration':
+        50,
+    'Bachelor of Science in Exercise and Sports Science Major in Sports and Fitness Management':
+        51,
+    'Bachelor of Elementary Education': 52,
+    'Bachelor of Secondary Education Major in English': 53,
+    'Bachelor of Secondary Education Major in Mathematics': 54,
+    'Bachelor of Secondary Education Major in Social Studies': 55,
+    'Bachelor of Science in Hospitality Management': 56,
+    'Bachelor of Science in Tourism Management': 57,
+    'Associate in Hospitality Management': 58,
+    'BA Multimedia Arts (Animation Specialization)': 59,
+    'BA Multimedia Arts (Film Specialization)': 60,
+    'BA Communication': 61,
+    'Associate in Customer Service Communication': 62,
+    'Bachelor of Science in Accountancy (BSA)': 63,
+    'Bachelor of Science in Management Accounting (BSMA)': 64,
+    'Bachelor of Science in Pharmacy': 65,
+    'Associate of Applied Science in Pharmacy Technology': 66,
+    'Diploma in Pharmaceutical Marketing': 67,
+    'Bachelor of Science in Nursing': 68,
+    'Bachelor of Science in Psychology': 69,
+    'Bachelor of Science in Social Work (BSSW)': 70,
+    'Automotive Servicing': 71,
+    'Computer System Servicing': 72,
+    'Electrical Installation': 73,
+    'Food and Beverage Service': 74,
+    'Fiber Optic Technician': 75,
+    'Ref and Air-Con Servicing': 76,
+    'Welding and Fabrication': 77,
+    'HWMS – Hilot Wellness Massage Specialist': 78,
+    'MMSPS – Manual Machine Shop Production Specialist': 79,
+    'Juris Doctor with Thesis': 80,
+    'Technical, Vocational, Livelihood Track': 81,
+    'Arts and Design Track': 82,
+    'Sports Track': 83,
   };
 
   final Map<String, int> collegeMapping = {
-    'College of Science': 1,
-    'College of Engineering': 2,
-    'College of Business': 3,
-    'College of Arts': 4,
-    // Add more colleges as needed
+    'College of Business and Financial Sciences (CBFS)': 1,
+    'College of Continuing, Advanced and Professional Studies (CCAPS)': 2,
+    'College of Computing and Information Sciences (CCIS)': 3,
+    'College of Construction Sciences and Engineering (CCSE)': 4,
+    'College of Engineering Technology (CET)': 5,
+    'College of Governance and Public Policy (CGPP)': 6,
+    'College of Human Kinetics (CHK)': 7,
+    'College of Innovative Teacher Education (CITE)': 8,
+    'College of Tourism and Hospitality Management (CTHM)': 9,
+    'Institute of Arts and Design (IAD)': 10,
+    'Institute of Accountancy (IOA)': 11,
+    'Institute of Pharmacy (IOP)': 12,
+    'Institute of Nursing (ION)': 13,
+    'Institute of Psychology (IOPsy)': 14,
+    'Institute for Social Development and Nation Building (ISDNB)': 15,
+    'Institute of Technical Education and Skills Training (ITEST)': 16,
+    'School of Law (SOL)': 17,
+    'Higher School ng UMak (CITE-HSU)': 18,
   };
 }

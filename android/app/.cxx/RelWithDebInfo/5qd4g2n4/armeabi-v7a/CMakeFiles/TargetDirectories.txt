@@ -1,0 +1,2 @@
+C:/Users/Anne/Desktop/Flutter Projects/mellow/android/app/.cxx/RelWithDebInfo/5qd4g2n4/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/Anne/Desktop/Flutter Projects/mellow/android/app/.cxx/RelWithDebInfo/5qd4g2n4/armeabi-v7a/CMakeFiles/rebuild_cache.dir

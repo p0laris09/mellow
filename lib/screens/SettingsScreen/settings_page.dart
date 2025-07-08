@@ -151,9 +151,7 @@ class _SettingsState extends State<SettingsPage> {
       body,
       tz.TZDateTime.from(scheduledTime, tz.local),
       platformChannelSpecifics,
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
       payload: payload,
     );

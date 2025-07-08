@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final String taskId;
@@ -14,6 +18,8 @@ class TaskDetailsScreen extends StatefulWidget {
   final String priority;
   final String urgency;
   final String complexity;
+  final String? createdBy; // Add createdBy field
+  final List<String>? assignedTo; // Add assignedTo field (list of UIDs)
 
   const TaskDetailsScreen({
     super.key,
@@ -28,6 +34,8 @@ class TaskDetailsScreen extends StatefulWidget {
     required this.priority,
     required this.urgency,
     required this.complexity,
+    this.createdBy,
+    this.assignedTo,
   });
 
   @override
@@ -44,14 +52,18 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   double? priority;
   double? urgency;
   double? complexity;
+  List<String> assignedToNames = [];
+  String? createdByName;
+  List<String> uploadedFiles = [];
 
   @override
   void initState() {
     super.initState();
     _loadTaskData();
+    _loadUploadedFiles();
   }
 
-  void _loadTaskData() {
+  Future<void> _loadTaskData() async {
     setState(() {
       taskName = widget.taskName;
       dueDate = widget.dueDate;
@@ -59,12 +71,87 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       dueDateTime = widget.dueDateTime;
       status = widget.status;
       description = widget.description;
-
-      // ✅ Convert string values to double, fallback to 0 if null
       priority = double.tryParse(widget.priority) ?? 0;
       urgency = double.tryParse(widget.urgency) ?? 0;
       complexity = double.tryParse(widget.complexity) ?? 0;
     });
+
+    // Fetch createdBy name
+    if (widget.createdBy != null) {
+      createdByName = await _getUserName(widget.createdBy!);
+      print('Created By Name: $createdByName'); // Debug print
+    } else {
+      print('No createdBy field found.');
+    }
+
+    // Fetch assignedTo names
+    if (widget.assignedTo != null && widget.assignedTo!.isNotEmpty) {
+      List<Future<String>> nameFutures =
+          widget.assignedTo!.map((uid) => _getUserName(uid)).toList();
+      assignedToNames = await Future.wait(nameFutures);
+      print('Assigned To Names: $assignedToNames'); // Debug print
+    } else {
+      print('No assignedTo field found or it is empty.');
+    }
+
+    setState(() {}); // Update UI after fetching names
+  }
+
+  Future<void> _loadUploadedFiles() async {
+    try {
+      DocumentSnapshot taskDoc = await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .get();
+
+      if (!taskDoc.exists || taskDoc.data() == null) {
+        print('Task document does not exist or has no data.');
+        return;
+      }
+
+      Map<String, dynamic> taskData = taskDoc.data() as Map<String, dynamic>;
+
+      if (taskData.containsKey('fileUrls')) {
+        uploadedFiles = List<String>.from(taskData['fileUrls']);
+        print('Files loaded: ${uploadedFiles.length}');
+        for (var file in uploadedFiles) {
+          print('File URL: $file'); // Debug print for each file URL
+        }
+      } else {
+        print('No files found in the task document.');
+      }
+
+      setState(() {});
+    } catch (e) {
+      print('Error loading files: $e');
+    }
+  }
+
+  Future<void> _downloadFile(String url, String fileName) async {
+    try {
+      final Directory tempDir = await getTemporaryDirectory();
+      final File file = File('${tempDir.path}/$fileName');
+
+      final Reference ref = FirebaseStorage.instance.refFromURL(url);
+      final DownloadTask downloadTask = ref.writeToFile(file);
+
+      final TaskSnapshot snapshot = await downloadTask.whenComplete(() {});
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      if (await file.exists()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$fileName downloaded successfully!')),
+        );
+        OpenFile.open(file.path);
+      } else {
+        throw Exception("Download failed or file not found.");
+      }
+    } catch (e) {
+      print('Error downloading file: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downloading file: ${e.toString()}')),
+      );
+    }
   }
 
   // ✅ Get Label for Priority, Urgency, Complexity
@@ -100,7 +187,61 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
-  // ✅ Delete Task
+  Future<void> _confirmDeleteTask() async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.red),
+              SizedBox(width: 8),
+              Text(
+                'Confirm Delete',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to delete this task? This action cannot be undone.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false), // Cancel
+              child: const Text(
+                'Cancel',
+                style:
+                    TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pop(true), // Confirm
+              child: const Text(
+                'Delete',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _deleteTask();
+    }
+  }
+
   Future<void> _deleteTask() async {
     try {
       await FirebaseFirestore.instance
@@ -117,6 +258,79 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         SnackBar(content: Text('Error deleting task: ${e.toString()}')),
       );
     }
+  }
+
+  Future<String> _getUserName(String uid) async {
+    try {
+      DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        String firstName = userData['firstName'] ?? '';
+        String middleName = userData['middleName'] ?? '';
+        String lastName = userData['lastName'] ?? '';
+
+        // Format name as "FirstName MiddleInitial LastName"
+        String middleInitial =
+            middleName.isNotEmpty ? '${middleName[0]}. ' : '';
+        String fullName = '$firstName $middleInitial$lastName';
+        print('Fetched user name for UID $uid: $fullName'); // Debug print
+        return fullName;
+      } else {
+        print('No user found for UID $uid'); // Debug print
+      }
+    } catch (e) {
+      print('Error fetching user name for UID $uid: $e');
+    }
+    return 'Unknown User';
+  }
+
+  Widget _buildFileSection() {
+    if (uploadedFiles.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(thickness: 1, height: 20),
+        const Text(
+          'Files:',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        ...uploadedFiles.map((url) {
+          String fileName = Uri.parse(url).pathSegments.last;
+          return ListTile(
+            leading: url.endsWith('.jpg') ||
+                    url.endsWith('.png') ||
+                    url.endsWith('.jpeg')
+                ? GestureDetector(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return Dialog(
+                            child: Image.network(url),
+                          );
+                        },
+                      );
+                    },
+                    child: Image.network(
+                      url,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(Icons.insert_drive_file, size: 50),
+            title: Text(fileName),
+            trailing: IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: () => _downloadFile(url, fileName),
+            ),
+          );
+        }).toList(),
+      ],
+    );
   }
 
   @override
@@ -137,7 +351,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
         ),
         actions: [
-          // ✅ Mark as Finished
+          // Mark as Finished
           IconButton(
             icon: const Icon(Icons.check, color: Colors.white),
             onPressed: () async {
@@ -184,22 +398,59 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildDetailRow('Task Name', taskName),
-                        _buildDetailRow('Due Date', dueDate),
+                        _buildDetailRow(
+                          'Due Date',
+                          DateFormat('MMMM dd, yyyy hh:mm a')
+                              .format(dueDateTime),
+                        ),
                         _buildStatusChip(
                             'Status', status, _getStatusColor(status)),
-                        _buildDetailRow('Start Time',
-                            DateFormat('hh:mm a').format(startDateTime)),
-                        _buildDetailRow('End Time',
-                            DateFormat('hh:mm a').format(dueDateTime)),
+                        _buildDetailRow(
+                          'Start Time',
+                          DateFormat('MMMM dd, yyyy hh:mm a')
+                              .format(startDateTime),
+                        ),
+                        _buildDetailRow(
+                          'End Time',
+                          DateFormat('MMMM dd, yyyy hh:mm a')
+                              .format(dueDateTime),
+                        ),
                         _buildDetailRow('Description', description),
 
-                        // ✅ Show Priority, Urgency, Complexity Correctly
+                        // Show Created By
+                        if (createdByName != null || assignedToNames.isNotEmpty)
+                          const Divider(thickness: 1, height: 20),
+
+                        if (createdByName != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Created by: $createdByName',
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+
+                        // Show Assigned To
+                        if (assignedToNames.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Assigned to: ${assignedToNames.join(', ')}',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+
+                        // Show Priority, Urgency, Complexity
                         _buildDetailRow(
                             'Priority', _getPriorityLabel(priority ?? 0)),
                         _buildDetailRow(
                             'Urgency', _getPriorityLabel(urgency ?? 0)),
                         _buildDetailRow(
                             'Complexity', _getPriorityLabel(complexity ?? 0)),
+
+                        // Add File Section
+                        _buildFileSection(),
 
                         const SizedBox(height: 20),
                       ],
@@ -208,7 +459,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 ),
               ),
             ),
-            // ✅ Delete Button at the Bottom
+            // Delete Button at the Bottom
             Center(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -218,7 +469,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: _deleteTask,
+                onPressed:
+                    _confirmDeleteTask, // Updated to call _confirmDeleteTask
                 child: const Text('DELETE TASK',
                     style: TextStyle(color: Colors.white)),
               ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mellow/screens/ProfileScreen/AcceptDeclineFriendRequest/add_friend.dart';
 
 class ViewProfile extends StatefulWidget {
   final String userId;
@@ -152,6 +153,7 @@ class _ViewProfileState extends State<ViewProfile> {
 
   Future<void> _unfriendUser() async {
     try {
+      // Remove the friendship from both users' friend lists
       await FirebaseFirestore.instance
           .collection('friends_db')
           .doc(currentUserId)
@@ -170,6 +172,14 @@ class _ViewProfileState extends State<ViewProfile> {
         isFriend = false;
         friendCount--; // Decrease friend count
       });
+
+      // Navigate to the AddFriend page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddFriend(userId: widget.userId),
+        ),
+      );
     } catch (e) {
       setState(() {
         errorMessage = 'Failed to unfriend user: $e';

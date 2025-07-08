@@ -242,20 +242,22 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
             // If it's already a Timestamp, convert it to DateTime
             lastOpenedDate = lastOpened.toDate();
           } else if (lastOpened is String) {
-            // If it's a String, try to parse it to DateTime
+            // If it's a String, parse it using a custom format
             try {
-              lastOpenedDate = DateTime.parse(lastOpened);
+              lastOpenedDate = DateFormat('yyyy-M-d HH:m:s').parse(lastOpened);
             } catch (e) {
               print('Error parsing lastOpened string: $e');
             }
           }
         }
 
-        // Optionally, you can add the converted DateTime back to the space data or use it for further processing
-        if (lastOpenedDate != null) {
-          space['lastOpenedDate'] =
-              lastOpenedDate; // Adding the converted DateTime back to the space map
-        }
+        // Format the date as "Month Name Day, Year"
+        final formattedDate = lastOpenedDate != null
+            ? DateFormat('MMMM d, yyyy').format(lastOpenedDate)
+            : 'Unknown Date';
+
+        // Optionally, you can add the formatted date back to the space data
+        space['formattedLastOpened'] = formattedDate;
 
         return doc; // Returning the original document, you can modify this if needed
       }).toList();
@@ -428,7 +430,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                   ),
                 )
               : SizedBox(
-                  height: 120, // Adjust height to fit the cards
+                  height: 150, // Adjust height to fit the cards
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _recentSpaces.length,
@@ -436,25 +438,18 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       final space = _recentSpaces[index];
                       final spaceName = space['name'] ?? 'Unnamed Space';
                       final description = space['description'] ?? '';
-                      final lastOpened = space['lastOpened'];
+                      final createdAt = space['createdAt'];
 
-                      DateTime? lastOpenedDate;
+                      DateTime? createdAtDate;
 
-                      // Handle both Timestamp and String cases
-                      if (lastOpened != null) {
-                        if (lastOpened is Timestamp) {
-                          lastOpenedDate = lastOpened.toDate();
-                        } else if (lastOpened is String) {
-                          try {
-                            lastOpenedDate = DateTime.parse(lastOpened);
-                          } catch (e) {
-                            print('Error parsing lastOpened string: $e');
-                          }
-                        }
+                      // Handle Timestamp for createdAt
+                      if (createdAt != null && createdAt is Timestamp) {
+                        createdAtDate = createdAt.toDate();
                       }
 
-                      final date = lastOpenedDate != null
-                          ? DateFormat('MMM d, yyyy').format(lastOpenedDate)
+                      // Format the creation date as "March 10, 2025"
+                      final date = createdAtDate != null
+                          ? DateFormat('MMMM d, yyyy').format(createdAtDate)
                           : 'Unknown Date';
 
                       return Padding(
@@ -463,7 +458,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                           spaceId: space.id, // Pass the space ID here
                           spaceName: spaceName,
                           description: description,
-                          date: date,
+                          date: date, // Pass the formatted creation date
                         ),
                       );
                     },
@@ -493,19 +488,14 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
               ),
             ),
           ),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('tasks')
-                .where('userId', isEqualTo: uid)
-                .where('status', whereIn: ['pending', 'ongoing', 'overdue'])
-                .orderBy('endTime', descending: false)
-                .snapshots(),
+          StreamBuilder<List<DocumentSnapshot>>(
+            stream: _fetchUserTasks(uid),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Text("Error loading tasks: ${snapshot.error}");
               }
 
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
@@ -515,27 +505,75 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                 );
               }
 
-              var taskDocs = snapshot.data!.docs;
+              var taskDocs = snapshot.data!;
               DateTime now = DateTime.now();
+
+              // Filter tasks based on the computed statusLabel
+              var filteredTasks = taskDocs.where((task) {
+                final taskData = task.data() as Map<String, dynamic>;
+                DateTime startTime =
+                    (taskData['startTime'] as Timestamp?)?.toDate() ??
+                        DateTime.now();
+                DateTime dueDate =
+                    (taskData['endTime'] as Timestamp?)?.toDate() ??
+                        DateTime.now();
+                String taskStatus = taskData['status'] ?? 'Pending';
+
+                // Compute dynamic status
+                bool isOverdue =
+                    now.isAfter(dueDate) && taskStatus != 'Finished';
+                bool isOngoing =
+                    now.isAfter(startTime) && now.isBefore(dueDate);
+
+                String statusLabel;
+                if (taskStatus == 'Finished') {
+                  statusLabel = 'Finished';
+                } else if (isOngoing) {
+                  statusLabel = 'Ongoing';
+                } else if (isOverdue) {
+                  statusLabel = 'Overdue';
+                } else {
+                  statusLabel = 'Pending';
+                }
+
+                // Only include tasks with status Pending, Ongoing, or Overdue
+                return statusLabel == 'Pending' ||
+                    statusLabel == 'Ongoing' ||
+                    statusLabel == 'Overdue';
+              }).toList();
 
               return ListView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 shrinkWrap: true,
-                itemCount: taskDocs.length,
+                itemCount: filteredTasks.length,
                 itemBuilder: (context, index) {
-                  DocumentSnapshot task = taskDocs[index];
+                  DocumentSnapshot task = filteredTasks[index];
                   String taskId = task.id;
+                  final taskData = task.data() as Map<String, dynamic>;
                   DateTime startTime =
-                      (task['startTime'] as Timestamp).toDate();
-                  DateTime dueDate = (task['endTime'] as Timestamp).toDate();
-                  String name = task['taskName'] ?? 'Unnamed Task';
-                  String taskStatus = task['status'] ?? 'pending';
+                      (taskData['startTime'] as Timestamp?)?.toDate() ??
+                          DateTime.now();
+                  DateTime dueDate =
+                      (taskData['endTime'] as Timestamp?)?.toDate() ??
+                          DateTime.now();
+                  String name = taskData['taskName'] ?? 'Unnamed Task';
+                  String taskStatus = taskData['status'] ?? 'Pending';
 
-                  // Dynamically set status based on current time
-                  if (now.isAfter(startTime) && now.isBefore(dueDate)) {
-                    taskStatus = 'ongoing';
-                  } else if (now.isAfter(dueDate)) {
-                    taskStatus = 'overdue';
+                  // Compute dynamic status
+                  bool isOverdue =
+                      now.isAfter(dueDate) && taskStatus != 'Finished';
+                  bool isOngoing =
+                      now.isAfter(startTime) && now.isBefore(dueDate);
+
+                  String statusLabel;
+                  if (taskStatus == 'Finished') {
+                    statusLabel = 'Finished';
+                  } else if (isOngoing) {
+                    statusLabel = 'Ongoing';
+                  } else if (isOverdue) {
+                    statusLabel = 'Overdue';
+                  } else {
+                    statusLabel = 'Pending';
                   }
 
                   String formattedStartTime =
@@ -552,7 +590,7 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
                       startTime: formattedStartTime,
                       startDateTime: startTime,
                       dueDateTime: dueDate,
-                      taskStatus: taskStatus,
+                      taskStatus: statusLabel, // Pass the computed statusLabel
                       onTaskFinished: () {
                         // Add your logic here for when the task is finished
                       },
@@ -565,6 +603,37 @@ class _DashboardScreenContentState extends State<DashboardScreenContent> {
         ],
       ),
     );
+  }
+
+  Stream<List<DocumentSnapshot>> _fetchUserTasks(String uid) async* {
+    try {
+      // Query for tasks where the user is assigned (as a string or in an array)
+      QuerySnapshot arrayQuery = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedTo', arrayContains: uid)
+          .get();
+
+      QuerySnapshot stringQuery = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('assignedTo', isEqualTo: uid)
+          .get();
+
+      // Combine both query results and remove duplicates
+      List<DocumentSnapshot> allTasks = [];
+      Set<String> taskIds = {};
+
+      for (var doc in arrayQuery.docs + stringQuery.docs) {
+        if (!taskIds.contains(doc.id)) {
+          taskIds.add(doc.id);
+          allTasks.add(doc);
+        }
+      }
+
+      yield allTasks;
+    } catch (e) {
+      print("Error fetching tasks: $e");
+      yield [];
+    }
   }
 
   Future<String?> _getFirstName() async {

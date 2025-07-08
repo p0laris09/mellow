@@ -479,11 +479,25 @@ class _ViewSpaceState extends State<ViewSpace> {
             const SizedBox(height: 8),
             ...activities.map((activityDoc) {
               final activity = activityDoc.data() as Map<String, dynamic>;
-              final createdBy = activity['createdBy'] as String;
-              final taskName = activity['taskName'] as String;
-              final assignedToUids = activity['assignedTo'] as List<dynamic>;
-              final timestamp = (activity['timestamp'] as Timestamp).toDate();
+              final createdBy =
+                  activity['createdBy'] as String? ?? "Unknown User";
+              final taskName =
+                  activity['taskName'] as String? ?? "Unnamed Task";
+              final assignedToField = activity['assignedTo'];
+              final timestamp =
+                  (activity['timestamp'] as Timestamp?)?.toDate() ??
+                      DateTime.now();
               final timeAgo = timeAgoSinceDate(timestamp);
+
+              // Handle assignedTo field (String or List<dynamic>)
+              List<String> assignedToUids = [];
+              if (assignedToField is String) {
+                assignedToUids = [
+                  assignedToField
+                ]; // Convert single string to list
+              } else if (assignedToField is List<dynamic>) {
+                assignedToUids = assignedToField.cast<String>();
+              }
 
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance
@@ -495,9 +509,19 @@ class _ViewSpaceState extends State<ViewSpace> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final userData =
-                      userSnapshot.data!.data() as Map<String, dynamic>;
+                      userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
                   final userName =
-                      "${userData['firstName']} ${userData['lastName']}";
+                      "${userData['firstName'] ?? 'Unknown'} ${userData['lastName'] ?? 'User'}";
+
+                  // Check if assignedToUids is empty
+                  if (assignedToUids.isEmpty) {
+                    return ActivityItem(
+                      userName: userName,
+                      description:
+                          "$userName created task $taskName but did not assign it to anyone.",
+                      timestamp: timeAgo,
+                    );
+                  }
 
                   return FutureBuilder<QuerySnapshot>(
                     future: FirebaseFirestore.instance
@@ -510,8 +534,8 @@ class _ViewSpaceState extends State<ViewSpace> {
                       }
                       final assignedToNames =
                           assignedToSnapshot.data!.docs.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        return "${data['firstName']} ${data['lastName']}";
+                        final data = doc.data() as Map<String, dynamic>? ?? {};
+                        return "${data['firstName'] ?? 'Unknown'} ${data['lastName'] ?? 'User'}";
                       }).join(", ");
 
                       return ActivityItem(

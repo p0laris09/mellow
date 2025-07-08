@@ -35,6 +35,8 @@ class ViewTaskPreference extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontSize: 20),
         ),
         centerTitle: true,
+        iconTheme: const IconThemeData(
+            color: Colors.white), // Set back arrow color to white
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _getTaskPreference(),
@@ -82,8 +84,6 @@ class ViewTaskPreference extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildEditButton(context),
                 ],
               ),
             );
@@ -126,43 +126,6 @@ class ViewTaskPreference extends StatelessWidget {
           children: taskTypes.map<Widget>((task) => Text('- $task')).toList(),
         ),
       ),
-    );
-  }
-
-  Widget _buildEditButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () {
-          // Navigate to Edit Page (to be implemented)
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => EditTaskPreference()),
-          );
-        },
-        icon: const Icon(Icons.edit, color: Colors.white),
-        label: const Text(
-          'Edit Preferences',
-          style: TextStyle(fontSize: 18, color: Colors.white),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2275AA),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-    );
-  }
-}
-
-// Placeholder for Edit Page
-class EditTaskPreference extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Edit Task Preferences")),
-      body: const Center(child: Text("Edit Page Coming Soon...")),
     );
   }
 }

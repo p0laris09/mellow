@@ -75,10 +75,18 @@ class _SpaceActivityFeedScreenState extends State<SpaceActivityFeedScreen> {
               itemBuilder: (context, index) {
                 final activityDoc = activities[index];
                 final activity = activityDoc.data() as Map<String, dynamic>;
-                final createdBy = activity['createdBy'] as String;
-                final taskName = activity['taskName'] as String;
-                final assignedToUids = activity['assignedTo'] as List<dynamic>;
-                final timestamp = (activity['timestamp'] as Timestamp).toDate();
+
+                // Safely retrieve fields with null checks
+                final createdBy =
+                    activity['createdBy'] as String? ?? "Unknown User";
+                final taskName =
+                    activity['taskName'] as String? ?? "Unnamed Task";
+                final assignedToUids = activity['assignedTo'] is List<dynamic>
+                    ? activity['assignedTo'] as List<dynamic>
+                    : [];
+                final timestamp =
+                    (activity['timestamp'] as Timestamp?)?.toDate() ??
+                        DateTime.now();
                 final timeAgo = timeAgoSinceDate(timestamp);
 
                 return FutureBuilder<DocumentSnapshot>(
@@ -91,9 +99,20 @@ class _SpaceActivityFeedScreenState extends State<SpaceActivityFeedScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     final userData =
-                        userSnapshot.data!.data() as Map<String, dynamic>;
+                        userSnapshot.data!.data() as Map<String, dynamic>? ??
+                            {};
                     final userName =
-                        "${userData['firstName']} ${userData['lastName']}";
+                        "${userData['firstName'] ?? 'Unknown'} ${userData['lastName'] ?? 'User'}";
+
+                    // Check if assignedToUids is empty
+                    if (assignedToUids.isEmpty) {
+                      return ActivityItem(
+                        userName: userName,
+                        description:
+                            "$userName created task $taskName but did not assign it to anyone.",
+                        timestamp: timeAgo,
+                      );
+                    }
 
                     return FutureBuilder<QuerySnapshot>(
                       future: FirebaseFirestore.instance
@@ -107,8 +126,9 @@ class _SpaceActivityFeedScreenState extends State<SpaceActivityFeedScreen> {
                         }
                         final assignedToNames =
                             assignedToSnapshot.data!.docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return "${data['firstName']} ${data['lastName']}";
+                          final data =
+                              doc.data() as Map<String, dynamic>? ?? {};
+                          return "${data['firstName'] ?? 'Unknown'} ${data['lastName'] ?? 'User'}";
                         }).join(", ");
 
                         return ActivityItem(

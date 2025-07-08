@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +26,7 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
   List<String> selectedMembers = [];
   Map<String, String> memberNamesMap = {}; // Map UID to name
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _autoFillEnabled = true; // State variable for the toggle button
 
   int _descriptionCharCount = 0;
   double _priority = 1;
@@ -34,6 +36,8 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
   String? _selectedSpace; // Add a variable to hold the selected space
   List<Map<String, String>> _spaces =
       []; // Add a list to hold the available spaces
+
+  List<PlatformFile> _selectedFiles = []; // List to store selected files
 
   // Initialize TaskManager
   late TaskManager taskManager;
@@ -345,7 +349,7 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
       String taskType = 'space'; // Assuming this is a space task
 
       // Create a new Task object with both userId and spaceId
-      Task newTask = Task(
+      TaskSpace newTask = TaskSpace(
         userId: userId, // Store userId (creator's ID)
         spaceId: spaceId, // Store spaceId
         taskName: taskName,
@@ -357,6 +361,8 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
         urgency: _urgency,
         complexity: _complexity,
         assignedTo: assignedTo,
+        taskType: taskType, // Use the determined task type
+        createdBy: userId, // Use the current user's ID as the creator
       );
 
       // Calculate the weight of the task
@@ -366,7 +372,6 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
       taskManager.addTask(newTask);
 
       // Apply Eisenhower Matrix
-      taskManager.applyEisenhowerMatrix();
 
       // Debugging: Print task details
       print('Task created: ${newTask.toString()}');
@@ -422,6 +427,160 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
         const SnackBar(content: Text('Please fill in all fields')),
       );
     }
+  }
+
+  Future<void> _autoFillTaskDetails() async {
+    if (_taskNameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a task name to auto-fill.')),
+      );
+      return;
+    }
+
+    if (selectedMembers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please assign the task to at least one member.')),
+      );
+      return;
+    }
+
+    try {
+      // Query Firestore for tasks with the same task name and assigned to any of the selected members
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('spaceId',
+              isEqualTo: _selectedSpace) // Filter by the selected space
+          .where('taskName',
+              isEqualTo: _taskNameController.text.trim()) // Match task name
+          .where('assignedTo',
+              arrayContainsAny: selectedMembers) // Match any selected member
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // Use the first matching task to auto-fill details
+        final taskData = querySnapshot.docs.first.data();
+        setState(() {
+          _descriptionController.text = taskData['description'] ?? '';
+          _priority = (taskData['priority'] as num?)?.toDouble() ?? 1.0;
+          _urgency = (taskData['urgency'] as num?)?.toDouble() ?? 1.0;
+          _complexity = (taskData['complexity'] as num?)?.toDouble() ?? 1.0;
+          _dueDateController.text = DateFormat('yyyy-MM-dd HH:mm')
+              .format((taskData['dueDate'] as Timestamp).toDate());
+          _startTimeController.text = DateFormat('yyyy-MM-dd HH:mm')
+              .format((taskData['startTime'] as Timestamp).toDate());
+          _endTimeController.text = DateFormat('yyyy-MM-dd HH:mm')
+              .format((taskData['endTime'] as Timestamp).toDate());
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Task details auto-filled successfully.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No similar task found to auto-fill.')),
+        );
+      }
+    } catch (e) {
+      print('Error auto-filling task details: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error auto-filling task details: $e')),
+      );
+    }
+  }
+
+  Future<void> _pickFiles() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true, // Allow multiple file selection
+        type: FileType.custom, // Restrict file types
+        allowedExtensions: [
+          'txt',
+          'pdf',
+          'doc',
+          'docx',
+          'jpeg',
+          'jpg',
+          'png'
+        ], // Allowed file types
+      );
+
+      if (result != null) {
+        // Check file size limit (150MB)
+        List<PlatformFile> validFiles = result.files.where((file) {
+          return file.size <= 150 * 1024 * 1024; // 150MB in bytes
+        }).toList();
+
+        if (validFiles.length != result.files.length) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Some files were not added because they exceed the 150MB limit.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+
+        setState(() {
+          _selectedFiles.addAll(validFiles); // Add valid files to the list
+        });
+
+        // Show an indicator that files have been added
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${validFiles.length} file(s) added successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error picking files: $e'); // Log the error to the debug console
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking files: $e')),
+      );
+    }
+  }
+
+  void _removeFile(int index) {
+    setState(() {
+      _selectedFiles.removeAt(index);
+    });
+  }
+
+  Widget _buildFileUploadNote() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD), // Light blue background
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2275AA), width: 1.5),
+        ),
+        padding: const EdgeInsets.all(16.0),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Color(0xFF2275AA),
+              size: 24,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'You can upload files with the following extensions: txt, pdf, doc, docx, jpeg, jpg, png. Maximum file size is 150MB.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF2275AA),
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.left,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSlider(
@@ -777,19 +936,82 @@ class _TaskCreationSpaceState extends State<TaskCreationSpace> {
                       ),
                     ),
                     const SizedBox(height: 25),
-                    Center(
-                      child: ElevatedButton(
-                        onPressed: _createTaskInFirestore,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 50,
-                            vertical: 20,
+                    _buildFileUploadNote(),
+                    const SizedBox(height: 25),
+                    SizedBox(
+                      width: 325,
+                      child: Column(
+                        children: [
+                          ElevatedButton(
+                            onPressed: _pickFiles,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 50, vertical: 20),
+                              foregroundColor: Colors.white,
+                              backgroundColor: const Color(0xFF2275AA),
+                            ),
+                            child: const Text('Attach Files'),
                           ),
-                          foregroundColor: Colors.white,
-                          backgroundColor: const Color(0xFF2275AA),
-                        ),
-                        child: const Text('Create Task'),
+                          const SizedBox(height: 16),
+                          if (_selectedFiles.isNotEmpty)
+                            Column(
+                              children:
+                                  _selectedFiles.asMap().entries.map((entry) {
+                                int index = entry.key;
+                                PlatformFile file = entry.value;
+                                return ListTile(
+                                  leading: const Icon(Icons.insert_drive_file,
+                                      color: Colors.blue),
+                                  title: Text(file.name),
+                                  subtitle: Text(
+                                      '${(file.size / (1024 * 1024)).toStringAsFixed(2)} MB'),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
+                                    onPressed: () => _removeFile(index),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 25),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _createTaskInFirestore,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 50,
+                              vertical: 20,
+                            ),
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xFF2275AA),
+                          ),
+                          child: const Text('Create Task'),
+                        ),
+                        const SizedBox(width: 20),
+                        IconButton(
+                          icon: Icon(
+                            _autoFillEnabled
+                                ? Icons.auto_awesome
+                                : Icons.auto_awesome_outlined,
+                            color: _autoFillEnabled ? Colors.green : Colors.red,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _autoFillEnabled = !_autoFillEnabled;
+                            });
+
+                            if (_autoFillEnabled) {
+                              _autoFillTaskDetails();
+                            }
+                          },
+                          tooltip: 'Toggle Auto-Fill',
+                        ),
+                      ],
                     ),
                   ],
                 ),

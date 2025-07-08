@@ -8,7 +8,6 @@ class SignUpCollegeDetails extends StatefulWidget {
   final String middleName;
   final String lastName;
   final String birthday;
-  final String gender;
 
   const SignUpCollegeDetails({
     super.key,
@@ -16,7 +15,6 @@ class SignUpCollegeDetails extends StatefulWidget {
     required this.middleName,
     required this.lastName,
     required this.birthday,
-    required this.gender,
   });
 
   @override
@@ -189,7 +187,6 @@ class _SignUpCollegeDetailsState extends State<SignUpCollegeDetails> {
           middleName: widget.middleName,
           lastName: widget.lastName,
           birthday: widget.birthday,
-          gender: widget.gender,
           university: _selectedUniversity!,
           college: _selectedCollege!,
           program: _selectedProgram!,

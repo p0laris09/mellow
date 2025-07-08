@@ -8,10 +8,18 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// filepath: c:\Users\Anne\Desktop\Flutter Projects\mellow\android\app\build.gradle
 android {
     namespace = "com.example.mellow"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 35 // Set to 35
+
+    defaultConfig {
+        applicationId = "com.example.mellow"
+        minSdk = 23
+        targetSdk = 35 // Set to 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -20,17 +28,6 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_1_8
-    }
-
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.mellow"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
     }
 
     buildTypes {

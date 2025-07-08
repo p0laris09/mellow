@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:mellow/screens/TaskDetails/task_detail_space.dart';
 import 'package:mellow/screens/TaskDetails/task_details.dart';
+import 'package:mellow/screens/TaskDetails/task_details_duo.dart';
 
 class TaskCard extends StatelessWidget {
   final String taskId;
@@ -47,17 +49,30 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if the task is overdue based on the due date
+    // Compute dynamic status
     bool isOverdue =
         DateTime.now().isAfter(dueDateTime) && taskStatus != 'Finished';
+    bool isOngoing = DateTime.now().isAfter(startDateTime) &&
+        DateTime.now().isBefore(dueDateTime);
 
-    // Determine task status colors based on Firestore status
-    Color statusColor;
+    String statusLabel;
     if (taskStatus == 'Finished') {
-      statusColor = Colors.green; // Finished -> Green
-    } else if (taskStatus == 'ongoing') {
-      statusColor = const Color.fromARGB(255, 33, 150, 243); // Ongoing -> Blue
+      statusLabel = 'Finished';
+    } else if (isOngoing) {
+      statusLabel = 'Ongoing';
     } else if (isOverdue) {
+      statusLabel = 'Overdue';
+    } else {
+      statusLabel = 'Pending';
+    }
+
+    // Determine task status colors based on the computed statusLabel
+    Color statusColor;
+    if (statusLabel == 'Finished') {
+      statusColor = Colors.green; // Finished -> Green
+    } else if (statusLabel == 'Ongoing') {
+      statusColor = const Color.fromARGB(255, 33, 150, 243); // Ongoing -> Blue
+    } else if (statusLabel == 'Overdue') {
       statusColor = Colors.red; // Overdue -> Red
     } else {
       statusColor = Colors.grey; // Pending -> Grey
@@ -72,46 +87,86 @@ class TaskCard extends StatelessWidget {
             .doc(taskId)
             .get();
 
+        if (!taskDoc.exists || taskDoc.data() == null) {
+          print('Task document does not exist or has no data.');
+          return;
+        }
+
         Map<String, dynamic> taskData = taskDoc.data() as Map<String, dynamic>;
 
         // Extract and convert necessary fields from Firestore
         String description =
             taskData['description'] ?? 'No description available';
-
-        // Ensure proper type conversion to String
         String priority = (taskData['priority'] ?? 'Not set').toString();
         String urgency = (taskData['urgency'] ?? 'Not set').toString();
         String complexity = (taskData['complexity'] ?? 'Not set').toString();
 
-        // Ensure that these values are treated as strings, even if they are numbers or other types
+        // Determine the appropriate screen based on task type
+        Widget targetScreen;
+        if (taskData['taskType'] == 'personal') {
+          targetScreen = TaskDetailsScreen(
+            taskId: taskId,
+            taskName: taskName,
+            startTime: startTime,
+            dueDate: dueDate,
+            startDateTime: startDateTime,
+            dueDateTime: dueDateTime,
+            status: statusLabel, // Pass the computed statusLabel
+            description: description,
+            priority: priority,
+            urgency: urgency,
+            complexity: complexity,
+          );
+        } else if (taskData['taskType'] == 'duo') {
+          targetScreen = TaskDetailsDuoScreen(
+            taskId: taskId,
+            taskName: taskName,
+            startTime: startTime,
+            dueDate: dueDate,
+            startDateTime: startDateTime,
+            dueDateTime: dueDateTime,
+            status: statusLabel, // Pass the computed statusLabel
+            description: description,
+            priority: priority,
+            urgency: urgency,
+            complexity: complexity, taskType: taskData['taskType'],
+          );
+        } else if (taskData['taskType'] == 'space') {
+          targetScreen = TaskDetailsSpaceScreen(
+            taskId: taskId,
+            taskName: taskName,
+            startTime: startTime,
+            dueDate: dueDate,
+            startDateTime: startDateTime,
+            dueDateTime: dueDateTime,
+            status: statusLabel, // Pass the computed statusLabel
+            description: description,
+            priority: priority,
+            urgency: urgency,
+            complexity: complexity,
+            taskType:
+                taskData['taskType'], // Pass taskType to match constructor
+          );
+        } else {
+          throw Exception('Unknown task type: ${taskData['taskType']}');
+        }
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TaskDetailsScreen(
-              taskId: taskId, // taskId to uniquely identify the task
-              taskName: taskName, // task name
-              startTime: startTime, // start time
-              dueDate: dueDate, // due date
-              startDateTime:
-                  startDateTime, // start date time (if different from startTime)
-              dueDateTime:
-                  dueDateTime, // due date time (if different from dueDate)
-              status: taskStatus,
-              description: description, // task description
-              priority: priority, // priority level
-              urgency: urgency, // urgency level
-              complexity: complexity, // complexity level
+        // Check if the widget is still mounted before navigating
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => targetScreen,
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color:
-              taskStatus == 'Finished' ? Colors.green.shade100 : Colors.white,
+              statusLabel == 'Finished' ? Colors.green.shade100 : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -162,14 +217,14 @@ class TaskCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Status: $taskStatus',
+                    'Status: $statusLabel',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: statusColor,
                     ),
                   ),
-                  if (taskStatus == 'Finished' && completionTime != null)
+                  if (statusLabel == 'Finished' && completionTime != null)
                     Text(
                       'Completed: ${DateFormat('yyyy-MM-dd HH:mm').format(completionTime!)}',
                       style: TextStyle(
@@ -186,7 +241,7 @@ class TaskCard extends StatelessWidget {
     );
 
     // Return the Dismissible widget only if the task is not finished
-    final isDismissible = taskStatus != 'Finished';
+    final isDismissible = statusLabel != 'Finished';
     if (isDismissible) {
       return Dismissible(
         key: Key(taskId),

@@ -1,10 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:mellow/models/TaskModel/task_model.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:uuid/uuid.dart';
 
 class TaskCreationScreen extends StatefulWidget {
   const TaskCreationScreen({super.key});
@@ -27,6 +31,14 @@ class TaskManager {
       tasks = querySnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
+        // Handle the 'assignedTo' field (String or List<dynamic>)
+        String assignedTo = '';
+        if (data['assignedTo'] is String) {
+          assignedTo = data['assignedTo'] as String;
+        } else if (data['assignedTo'] is List<dynamic>) {
+          assignedTo = (data['assignedTo'] as List<dynamic>).join(', ');
+        }
+
         Task task = Task(
           userId: data['userId'] ?? '', // Ensure userId is not null
           taskName: data['taskName'] ?? 'Untitled', // Default name if missing
@@ -38,8 +50,8 @@ class TaskManager {
           priority: (data['priority'] as num?)?.toDouble() ?? 1.0,
           urgency: (data['urgency'] as num?)?.toDouble() ?? 1.0,
           complexity: (data['complexity'] as num?)?.toDouble() ?? 1.0,
-          taskType: data['taskType'] ?? 'general', // Provide default task type
-          assignedTo: data['assignedTo'] ?? 'unassigned', // Default if missing
+          taskType: data['taskType'] ?? 'personal', // Provide default task type
+          assignedTo: assignedTo, // Handle mixed data types
         );
 
         task.updateWeight(criteriaWeights);
@@ -439,6 +451,118 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   // State variable for the toggle button
   bool _autoFillEnabled = true;
 
+  List<PlatformFile> _selectedFiles = []; // List to store selected files
+
+  Future<void> _pickFiles() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true, // Allow multiple file selection
+        type: FileType.custom, // Restrict file types
+        allowedExtensions: [
+          'txt',
+          'pdf',
+          'doc',
+          'docx',
+          'jpeg',
+          'jpg',
+          'png'
+        ], // Allowed file types
+      );
+
+      if (result != null) {
+        // Check file size limit (150MB)
+        List<PlatformFile> validFiles = result.files.where((file) {
+          return file.size <= 150 * 1024 * 1024; // 150MB in bytes
+        }).toList();
+
+        if (validFiles.length != result.files.length) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Some files were not added because they exceed the 150MB limit.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+
+        setState(() {
+          _selectedFiles.addAll(validFiles); // Add valid files to the list
+        });
+
+        // Show an indicator that files have been added
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${validFiles.length} file(s) added successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error picking files: $e'); // Log the error to the debug console
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking files: $e')),
+      );
+    }
+  }
+
+  Future<void> _uploadFilesToFirebase(String taskId) async {
+    try {
+      List<String> fileUrls = []; // List to store file URLs
+
+      for (var file in _selectedFiles) {
+        final String filePath = file.path!;
+        final File localFile = File(filePath);
+
+        // Generate a unique ID for the file
+        String fileId = const Uuid().v4();
+
+        // Upload file to Firebase Storage under 'task/<taskId>/files/<fileId>'
+        final firebase_storage.Reference storageRef = firebase_storage
+            .FirebaseStorage.instance
+            .ref()
+            .child('task/$taskId/files/$fileId');
+        final firebase_storage.UploadTask uploadTask =
+            storageRef.putFile(localFile);
+
+        // Wait for the upload to complete
+        final firebase_storage.TaskSnapshot snapshot = await uploadTask;
+
+        // Get the download URL
+        final String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        // Add the file URL to the list
+        fileUrls.add(downloadUrl);
+      }
+
+      // Update the task document with the file URLs
+      await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+        'fileUrls':
+            FieldValue.arrayUnion(fileUrls), // Append file URLs to the array
+        'timestamp':
+            FieldValue.serverTimestamp(), // Add a timestamp for the update
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Files uploaded successfully!')),
+        );
+      }
+    } catch (e) {
+      print('Error uploading files: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading files: $e')),
+        );
+      }
+    }
+  }
+
+  void _removeFile(int index) {
+    setState(() {
+      _selectedFiles.removeAt(index);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -598,7 +722,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       urgency: _urgency,
       complexity: _complexity,
       taskType: taskType,
-      assignedTo: '',
+      assignedTo: userId,
     );
 
     await taskManager.addTaskWithConflictResolution(
@@ -607,6 +731,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       userId,
       (resolvedTask) async {
         await _addTaskToFirestore(resolvedTask, userId);
+        await _uploadFilesToFirebase(resolvedTask.taskName);
       },
       criteriaWeights,
     );
@@ -637,27 +762,72 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   }
 
   Future<void> _addTaskToFirestore(Task task, String userId) async {
-    await FirebaseFirestore.instance.collection('tasks').add({
-      'taskName': task.taskName,
-      'dueDate': Timestamp.fromDate(task.dueDate),
-      'startTime': Timestamp.fromDate(task.startTime),
-      'endTime': Timestamp.fromDate(task.endTime),
-      'description': task.description,
-      'priority': task.priority,
-      'urgency': task.urgency,
-      'complexity': task.complexity,
-      'weight': task.weight,
-      'createdAt': Timestamp.now(),
-      'userId': userId,
-      'assignedTo': task.assignedTo, // Add assignedTo field
-      'status': 'pending',
-      'taskType': task.taskType,
-    });
+    try {
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(task.taskName)
+          .set({
+        'taskName': task.taskName,
+        'dueDate': Timestamp.fromDate(task.dueDate),
+        'startTime': Timestamp.fromDate(task.startTime),
+        'endTime': Timestamp.fromDate(task.endTime),
+        'description': task.description,
+        'priority': task.priority,
+        'urgency': task.urgency,
+        'complexity': task.complexity,
+        'weight': task.weight,
+        'createdAt': Timestamp.now(),
+        'userId': userId,
+        'assignedTo': task.assignedTo, // Save the user's UID here
+        'status': 'pending',
+        'taskType': task.taskType,
+        'fileUrls': [], // Initialize an empty fileUrls array
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task created successfully')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      print('Error creating task: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating task: $e')),
+      );
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task created successfully')),
+  Widget _buildFileUploadNote() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD), // Light blue background
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2275AA), width: 1.5),
+        ),
+        padding: const EdgeInsets.all(16.0),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Color(0xFF2275AA),
+              size: 24,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'You can upload files with the following extensions: txt, pdf, doc, docx, jpeg, jpg, png. Maximum file size is 150MB.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF2275AA),
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.left,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    Navigator.pop(context);
   }
 
   @override
@@ -697,7 +867,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(
-                    width: 300,
+                    width: 400,
                     child: TextField(
                       controller: _taskNameController,
                       style: const TextStyle(
@@ -752,7 +922,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
             ),
             const SizedBox(height: 45),
             SizedBox(
-              height: 720,
+              height: 1000,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 32,
@@ -879,6 +1049,37 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                         _complexity = value;
                       });
                     }),
+                    const SizedBox(height: 25),
+                    _buildFileUploadNote(),
+                    ElevatedButton(
+                      onPressed: _pickFiles,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 50,
+                          vertical: 20,
+                        ),
+                        foregroundColor: Colors.white,
+                        backgroundColor: const Color(0xFF2275AA),
+                      ),
+                      child: const Text('Attach Files'),
+                    ),
+                    const SizedBox(height: 15),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _selectedFiles.length,
+                        itemBuilder: (context, index) {
+                          return ListTile(
+                            title: Text(_selectedFiles[index].name),
+                            subtitle: Text(
+                                '${(_selectedFiles[index].size / (1024 * 1024)).toStringAsFixed(2)} MB'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _removeFile(index),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                     const SizedBox(height: 25),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

@@ -82,7 +82,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
       Query tasksQuery = FirebaseFirestore.instance
           .collection('tasks')
-          .where('userId', isEqualTo: uid)
+          .where('assignedTo', arrayContains: uid) // Filter by assignedTo
           .where('startTime', isLessThanOrEqualTo: endOfDay)
           .where('endTime', isGreaterThanOrEqualTo: startOfDay)
           .orderBy('startTime', descending: false)

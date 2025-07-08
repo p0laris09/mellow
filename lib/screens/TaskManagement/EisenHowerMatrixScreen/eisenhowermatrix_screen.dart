@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mellow/screens/TaskDetails/task_details.dart';
 
 class EisenhowerMatrixView extends StatefulWidget {
   final PageController pageController;
@@ -191,6 +192,35 @@ class TaskCard extends StatelessWidget {
     return Card(
       child: ListTile(
         title: Text(task['taskName'] ?? 'Unnamed Task'),
+        onTap: () {
+          // Navigate to TaskDetailsScreen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TaskDetailsScreen(
+                taskId: task['taskId'] ?? '',
+                taskName: task['taskName'] ?? 'Unnamed Task',
+                startTime: (task['startTime'] is Timestamp)
+                    ? (task['startTime'] as Timestamp).toDate().toString()
+                    : '',
+                dueDate: (task['dueDate'] is Timestamp)
+                    ? (task['dueDate'] as Timestamp).toDate().toString()
+                    : '',
+                startDateTime: (task['startTime'] is Timestamp)
+                    ? (task['startTime'] as Timestamp).toDate()
+                    : DateTime.now(),
+                dueDateTime: (task['dueDate'] is Timestamp)
+                    ? (task['dueDate'] as Timestamp).toDate()
+                    : DateTime.now(),
+                status: task['status'] ?? 'Unknown',
+                description: task['description'] ?? 'No description',
+                priority: task['priority']?.toString() ?? '0',
+                urgency: task['urgency']?.toString() ?? '0',
+                complexity: task['complexity']?.toString() ?? '0',
+              ),
+            ),
+          );
+        },
       ),
     );
   }
